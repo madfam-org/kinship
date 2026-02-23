@@ -29,9 +29,9 @@ This document maps the trajectory of the Kinship platform from foundational proo
 *Focus: Moving beyond temporal logistics into economic resource pooling and deep inter-module cohesion to differentiate from siloed market competitors.*
 
 -   [x] **Virtual Asset Inventory:** Securely logging physical assets (tools, gear) available for lending within the vetted trust tiers.
--   [ ] **Sweat Equity Tracking:** A "Slicing Pie" dynamic equity model to fairly quantify and review non-monetary operations in community projects.
 -   [ ] **Collective Treasury:** Internal crowdfunding and highly constrained, transparent ledger systems for community subgroups. 
 -   [ ] **Non-Hierarchical Workflow Boards:** Consensus-based task assignment mimicking a circular economy logic rather than top-down corporate management.
+-   [ ] **Sweat Equity Tracking:** A "Slicing Pie" dynamic equity model to fairly quantify and review non-monetary operations in community projects.
 
 ### Strategic Market Vectors (Derived from Benchmark)
 -   [ ] **Inter-Module Automation:** Tying the "Social Battery" directly to cooperative features (e.g. automatically blocking heavy task assignments when capacity is critically low).
