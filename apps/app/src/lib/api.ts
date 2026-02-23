@@ -66,6 +66,40 @@ export async function createEvent(payload: Record<string, unknown>): Promise<Eve
   return res.json();
 }
 
+export async function muteEvent(eventId: string, userId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/events/${eventId}/mute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId })
+  });
+  if (!res.ok) throw new Error('Failed to mute event');
+}
+
+export async function unmuteEvent(eventId: string, userId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/events/${eventId}/mute`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId })
+  });
+  if (!res.ok) throw new Error('Failed to unmute event');
+}
+
+export async function fetchChatMessages(eventId: string, limit = 50, offset = 0): Promise<Page<Record<string, unknown>>> {
+  const res = await fetch(paginated(`${API_BASE}/events/${eventId}/messages`, limit, offset));
+  if (!res.ok) throw new Error('Failed to fetch chat messages');
+  return res.json();
+}
+
+export async function postChatMessage(eventId: string, senderId: string, encryptedPayload: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/events/${eventId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ senderId, encryptedPayload })
+  });
+  if (!res.ok) throw new Error('Failed to post chat message');
+  return res.json();
+}
+
 // --------------------------------------------------------------------------
 // Assets
 // --------------------------------------------------------------------------
@@ -87,6 +121,69 @@ export async function createAsset(payload: Record<string, unknown>): Promise<Ass
   });
   if (!res.ok) throw new Error('Failed to create asset');
   return res.json();
+}
+
+export async function uploadAssetPhoto(assetId: string, blob: Blob): Promise<{ success: boolean; assetId: string }> {
+  const res = await fetch(`${API_BASE}/assets/${assetId}/photo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: blob
+  });
+  if (!res.ok) throw new Error('Failed to upload asset photo');
+  return res.json();
+}
+
+export async function fetchAssetPhoto(assetId: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/assets/${assetId}/photo`);
+  if (!res.ok) throw new Error('Failed to fetch asset photo');
+  return res.blob();
+}
+
+// --------------------------------------------------------------------------
+// Shared Lists & Chores (Phase 8.4)
+// --------------------------------------------------------------------------
+
+export async function fetchGroupLists(groupId: string): Promise<Record<string, unknown>[]> {
+  const res = await fetch(`${API_BASE}/groups/${groupId}/lists`);
+  if (!res.ok) throw new Error('Failed to fetch lists');
+  return res.json();
+}
+
+export async function createGroupList(groupId: string, type: 'GROCERY' | 'CHORE' | 'TODO'): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/groups/${groupId}/lists`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type })
+  });
+  if (!res.ok) throw new Error('Failed to create list');
+  return res.json();
+}
+
+export async function addListItem(groupId: string, listId: string, encryptedPayload: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/groups/${groupId}/lists/${listId}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ encryptedPayload })
+  });
+  if (!res.ok) throw new Error('Failed to add list item');
+  return res.json();
+}
+
+export async function toggleListItem(groupId: string, listId: string, itemId: string, completed: boolean, completedById: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/groups/${groupId}/lists/${listId}/items/${itemId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ completed, completedById })
+  });
+  if (!res.ok) throw new Error('Failed to toggle list item');
+  return res.json();
+}
+
+export async function deleteListItem(groupId: string, listId: string, itemId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/groups/${groupId}/lists/${listId}/items/${itemId}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) throw new Error('Failed to delete list item');
 }
 
 // --------------------------------------------------------------------------

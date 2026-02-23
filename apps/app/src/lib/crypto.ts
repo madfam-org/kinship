@@ -256,3 +256,47 @@ export async function decryptText(encryptedBase64: string, key: CryptoKey): Prom
 
   return new TextDecoder().decode(decryptedContent);
 }
+
+// --- Binary Blob Encryption (Phase 7.5) ---
+
+/**
+ * Encrypt a binary file (Blob) using an AES-GCM group symmetric key.
+ * Prepends the 12-byte IV to the resulting ciphertext Blob.
+ */
+export async function encryptBlob(file: Blob, key: CryptoKey): Promise<Blob> {
+  const arrayBuffer = await file.arrayBuffer();
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  
+  const encryptedContent = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    arrayBuffer
+  );
+
+  const combined = new Uint8Array(iv.length + encryptedContent.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encryptedContent), iv.length);
+
+  return new Blob([combined]);
+}
+
+/**
+ * Decrypt a Blob that was encrypted by encryptBlob using the same AES-GCM key.
+ * Expected format: 12-byte IV followed by ciphertext.
+ */
+export async function decryptBlob(encryptedBlob: Blob, key: CryptoKey): Promise<Blob> {
+  const arrayBuffer = await encryptedBlob.arrayBuffer();
+  const combined = new Uint8Array(arrayBuffer);
+  
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+
+  const decryptedContent = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    ciphertext
+  );
+
+  // Return the original decrypted binary data
+  return new Blob([decryptedContent]);
+}

@@ -549,6 +549,238 @@ describe('Kinship API Endpoints', () => {
         .send({ wrappedKeys: [] });
       expect(res.statusCode).toEqual(400);
     });
+  }); // <-- ADDED MISSING BRACE HERE
+
+  describe('Phase 8 Core Features', () => {
+    describe('Event Muting (8.2)', () => {
+      it('POST /v1/events/:id/mute should add a mute record', async () => {
+        prisma.mutedEvent.upsert.mockResolvedValue({ eventId: 'evt1', userId: 'u1' });
+        const res = await request(app)
+          .post('/v1/events/evt1/mute')
+          .set('Authorization', `Bearer ${generateToken()}`)
+          .send({ userId: 'u1' });
+        expect(res.statusCode).toEqual(200);
+      });
+
+      it('DELETE /v1/events/:id/mute should drop a mute record', async () => {
+        prisma.mutedEvent.delete.mockResolvedValue({ eventId: 'evt1', userId: 'u1' });
+        const res = await request(app)
+          .delete('/v1/events/evt1/mute')
+          .set('Authorization', `Bearer ${generateToken()}`)
+          .send({ userId: 'u1' });
+        expect(res.statusCode).toEqual(200);
+      });
+    });
+
+    describe('In-Event Chat (8.3)', () => {
+      it('POST /v1/events/:id/messages should broadcast SSE and save message', async () => {
+        prisma.chatMessage.create.mockResolvedValue({ id: 'msg1', encryptedPayload: 'blob' });
+        prisma.event.findUnique.mockResolvedValue({ id: 'evt1', hostId: 'u2', wrappedKeys: [{ userId: 'u1' }] });
+        const res = await request(app)
+          .post('/v1/events/evt1/messages')
+          .set('Authorization', `Bearer ${generateToken()}`)
+          .send({ senderId: 'u1', encryptedPayload: 'blob' });
+        expect(res.statusCode).toEqual(200);
+      });
+
+      it('GET /v1/events/:id/messages should paginate chat history', async () => {
+        prisma.chatMessage.count.mockResolvedValue(1);
+        prisma.chatMessage.findMany.mockResolvedValue([{ id: 'msg1' }]);
+        const res = await request(app)
+          .get('/v1/events/evt1/messages')
+          .set('Authorization', `Bearer ${generateToken()}`);
+        expect(res.statusCode).toEqual(200);
+        expect(res.body.meta.total).toEqual(1);
+      });
+    });
+
+    describe('Shared Lists (8.4)', () => {
+      it('GET /v1/groups/:id/lists should fetch group lists', async () => {
+        prisma.list.findMany.mockResolvedValue([{ id: 'lst1', items: [] }]);
+        const res = await request(app)
+          .get('/v1/groups/g1/lists')
+          .set('Authorization', `Bearer ${generateToken()}`);
+        expect(res.statusCode).toEqual(200);
+      });
+
+      it('POST /v1/groups/:id/lists should create list', async () => {
+        prisma.list.create.mockResolvedValue({ id: 'lst1' });
+        const res = await request(app)
+          .post('/v1/groups/g1/lists')
+          .set('Authorization', `Bearer ${generateToken()}`)
+          .send({ type: 'TODO' });
+        expect(res.statusCode).toEqual(200);
+      });
+      
+      it('POST /v1/groups/:groupId/lists/:listId/items should add an item', async () => {
+        prisma.listItem.create.mockResolvedValue({ id: 'itm1' });
+        const res = await request(app)
+          .post('/v1/groups/g1/lists/lst1/items')
+          .set('Authorization', `Bearer ${generateToken()}`)
+          .send({ encryptedPayload: 'blob', createdById: 'u1' });
+        expect(res.statusCode).toEqual(200);
+      });
+
+      it('PATCH /v1/groups/:groupId/lists/:listId/items/:itemId should toggle completion', async () => {
+        prisma.listItem.update.mockResolvedValue({ id: 'itm1', completed: true });
+        const res = await request(app)
+          .patch('/v1/groups/g1/lists/lst1/items/itm1')
+          .set('Authorization', `Bearer ${generateToken()}`)
+          .send({ completed: true });
+        expect(res.statusCode).toEqual(200);
+      });
+    });
+
+    describe('Biometric Inter-module Webhook (8.5)', () => {
+      it('PATCH /v1/users/:id/battery should calculate score from healthMetrics', async () => {
+        prisma.user.update.mockResolvedValue({ id: 'u1', socialBattery: 50 });
+        prisma.user.findMany.mockResolvedValue([]);
+        const res = await request(app)
+          .patch('/v1/users/u1/battery')
+          .set('Authorization', `Bearer ${generateToken()}`)
+          .send({ healthMetrics: { hrv: 50, sleepQuality: 5 } });
+        expect(res.statusCode).toEqual(200);
+        expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+          data: expect.objectContaining({ socialBattery: 50 })
+        }));
+      });
+    });
+
+    describe('Calendar Sync (8.1)', () => {
+      it('GET /v1/users/:id/calendar.ics should return sanitized ICAL format', async () => {
+        prisma.groupMembership.findMany.mockResolvedValue([]);
+        prisma.event.findMany.mockResolvedValue([{
+          id: 'evt1', startTime: new Date('2026-03-01T12:00:00Z'), endTime: new Date('2026-03-01T13:00:00Z'), broadcastBusy: true
+        }]);
+        const res = await request(app)
+          .get('/v1/users/u1/calendar.ics')
+          .set('Authorization', `Bearer ${generateToken()}`);
+        expect(res.statusCode).toEqual(200);
+        expect(res.headers['content-type']).toMatch(/text\/calendar/);
+        expect(res.text).toContain('BEGIN:VCALENDAR');
+        expect(res.text).toContain('SUMMARY:Kinship Event');
+      });
+    });
+  });
+
+  describe('Treasury & Ledger Endpoints (6.1)', () => {
+    it('GET /v1/treasury/pools/:groupId should return a paginated list of pools', async () => {
+      prisma.treasuryPool.count.mockResolvedValue(1);
+      prisma.treasuryPool.findMany.mockResolvedValue([{ id: 'p1', _count: { ledgerEntries: 0 } }]);
+      const res = await request(app)
+        .get('/v1/treasury/pools/g1')
+        .set('Authorization', `Bearer ${generateToken()}`);
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.data[0].id).toBe('p1');
+    });
+
+    it('POST /v1/treasury/pledge should create entry and update pool', async () => {
+      prisma.$transaction.mockResolvedValue([ { id: 'le1' }, { id: 'p1', currentAmount: 100, goalAmount: 100, status: 'ACTIVE' } ]);
+      prisma.treasuryPool.update.mockResolvedValue({ status: 'FUNDED' });
+      const res = await request(app)
+        .post('/v1/treasury/pledge')
+        .set('Authorization', `Bearer ${generateToken()}`)
+        .send({ poolId: 'p1', contributorId: 'u1', amount: 100, memo: 'Test' });
+      expect(res.statusCode).toEqual(200);
+    });
+
+    it('GET /v1/treasury/pools/:poolId/ledger should return the ledger', async () => {
+      prisma.treasuryPool.findUnique.mockResolvedValue({ id: 'p1' });
+      prisma.ledgerEntry.count.mockResolvedValue(1);
+      prisma.ledgerEntry.findMany.mockResolvedValue([{ id: 'le1' }]);
+      const res = await request(app)
+        .get('/v1/treasury/pools/p1/ledger')
+        .set('Authorization', `Bearer ${generateToken()}`);
+      expect(res.statusCode).toEqual(200);
+    });
+  });
+
+  describe('Cooperative Economy: Slicing Pie (Phase 10.1)', () => {
+    it('GET /v1/groups/:groupId/projects should return a list of equity projects', async () => {
+      prisma.equityProject.findMany.mockResolvedValue([{ id: 'proj1', name: 'Open Source Initiative' }]);
+      const res = await request(app)
+        .get('/v1/groups/g1/projects')
+        .set('Authorization', `Bearer ${generateToken()}`);
+      expect(res.statusCode).toEqual(200);
+      expect(res.body[0].id).toBe('proj1');
+    });
+
+    it('POST /v1/groups/:groupId/projects should create a new project', async () => {
+      prisma.equityProject.create.mockResolvedValue({ id: 'proj1', name: 'New Project' });
+      const res = await request(app)
+        .post('/v1/groups/g1/projects')
+        .set('Authorization', `Bearer ${generateToken()}`)
+        .send({ name: 'New Project', description: 'Testing', createdById: 'u1' });
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.id).toBe('proj1');
+    });
+
+    it('POST /v1/groups/:groupId/projects should require name and createdById', async () => {
+      const res = await request(app)
+        .post('/v1/groups/g1/projects')
+        .set('Authorization', `Bearer ${generateToken()}`)
+        .send({ description: 'Missing name and id' }); // 400 trigger
+      expect(res.statusCode).toEqual(400);
+    });
+
+    it('GET /v1/projects/:projectId/contributions should return project contributions', async () => {
+      prisma.equityContribution.findMany.mockResolvedValue([{ id: 'c1', type: 'TIME' }]);
+      const res = await request(app)
+        .get('/v1/projects/proj1/contributions')
+        .set('Authorization', `Bearer ${generateToken()}`);
+      expect(res.statusCode).toEqual(200);
+      expect(res.body[0].id).toBe('c1');
+    });
+
+    it('POST /v1/projects/:projectId/contributions should log a new contribution', async () => {
+      prisma.equityContribution.create.mockResolvedValue({ id: 'c1', slices: 200 }); // FMV 100 * RM 2
+      const res = await request(app)
+        .post('/v1/projects/proj1/contributions')
+        .set('Authorization', `Bearer ${generateToken()}`)
+        .send({
+          contributorId: 'u1', type: 'TIME', description: 'Dev Work', fairMarketValue: 100, riskMultiplier: 2, date: new Date().toISOString()
+        });
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.slices).toBe(200);
+    });
+
+    it('POST /v1/projects/:projectId/contributions should require all fields', async () => {
+      const res = await request(app)
+        .post('/v1/projects/proj1/contributions')
+        .set('Authorization', `Bearer ${generateToken()}`)
+        .send({ contributorId: 'u1' }); // missing fields -> 400
+      expect(res.statusCode).toEqual(400);
+    });
+
+    it('should delegate equity errors to the centralized handler', async () => {
+      prisma.equityProject.findMany.mockRejectedValue(new Error('Equity DB Fail'));
+      const res = await request(app)
+        .get('/v1/groups/g1/projects')
+        .set('Authorization', `Bearer ${generateToken()}`);
+      expect(res.statusCode).toEqual(500);
+    });
+  });
+
+  describe('Global Error Handling', () => {
+    it('should delegate internal prisma errors to the centralized handler', async () => {
+      // Force an error in an arbitrary route to trigger the catch(error) -> next(error) branch
+      prisma.user.findUnique.mockRejectedValue(new Error('Simulated Database Failure'));
+      const res = await request(app)
+        .get('/v1/users/u1')
+        .set('Authorization', `Bearer ${generateToken()}`);
+      
+      expect(res.statusCode).toEqual(500);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.message).toContain('unexpected internal server error');
+    });
+
+    it('should return 404 for unknown endpoints', async () => {
+      const res = await request(app)
+        .get('/v1/this-route-does-not-exist')
+        .set('Authorization', `Bearer ${generateToken()}`);
+      expect(res.statusCode).toEqual(404);
+      expect(res.body.error.message).toContain('Route not found');
+    });
   });
 
 });

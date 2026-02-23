@@ -26,6 +26,11 @@ model User {
   loanRequests     LoanRequest[]    @relation("Borrower")
   ledgerEntries    LedgerEntry[]
   keyRotationRequests KeyRotationRequest[] @relation("KeyRotationRequests")
+  equityProjects   EquityProject[]
+  equityContributions EquityContribution[]
+  completedListItems ListItem[]
+  chatMessages     ChatMessage[]
+  mutedEvents      MutedEvent[]
 }
 
 model Group {
@@ -36,6 +41,32 @@ model Group {
   assets              Asset[]
   treasuryPools       TreasuryPool[]
   keyRotationRequests KeyRotationRequest[]
+  lists               List[]
+  equityProjects      EquityProject[]
+}
+
+model List {
+  id        String     @id @default(uuid())
+  groupId   String
+  group     Group      @relation(fields: [groupId], references: [id])
+  type      String     @default("TODO") // e.g. "GROCERY", "CHORE", "TODO"
+  items     ListItem[]
+  createdAt DateTime   @default(now())
+}
+
+model ListItem {
+  id               String   @id @default(uuid())
+  listId           String
+  list             List     @relation(fields: [listId], references: [id])
+  
+  // Base64 encoded AES-GCM blob containing list item text
+  encryptedPayload String
+  
+  completed        Boolean  @default(false)
+  completedById    String?
+  completedBy      User?    @relation(fields: [completedById], references: [id])
+  
+  createdAt        DateTime @default(now())
 }
 
 model GroupMembership {
@@ -69,6 +100,33 @@ model Event {
   // Relations
   wrappedKeys      WrappedKey[]
   pollOptions      PollOption[]
+  mutedBy          MutedEvent[]
+  chatMessages     ChatMessage[]
+}
+
+model ChatMessage {
+  id               String   @id @default(uuid())
+  eventId          String
+  event            Event    @relation(fields: [eventId], references: [id])
+  senderId         String
+  sender           User     @relation(fields: [senderId], references: [id])
+  
+  // Base64 encoded AES-GCM blob containing the message text and sender's display name
+  // Encrypted using the event's group symmetric key
+  encryptedPayload String
+
+  createdAt        DateTime @default(now())
+}
+
+model MutedEvent {
+  id        String   @id @default(uuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
 }
 
 model PollOption {
@@ -116,6 +174,7 @@ model Asset {
 
   // Encrypted Metadata (Name, Description, Photo URL)
   encryptedMetadata String?  // Base64 AES-GCM blob
+  encryptedPhotoBlob Bytes?  // Encrypted binary payload
 
   status           String    @default("AVAILABLE") // AVAILABLE, LENT, MAINTENANCE
   visibilityLayer  String    // INNER_CIRCLE, OUTER_RING, etc.
@@ -188,3 +247,39 @@ model KeyRotationRequest {
   requestedBy       User     @relation("KeyRotationRequests", fields: [requestedByUserId], references: [id])
   createdAt         DateTime @default(now())
 }
+
+// --- Cooperative Economy (Phase 10) ---
+
+model EquityProject {
+  id            String               @id @default(uuid())
+  groupId       String
+  group         Group                @relation(fields: [groupId], references: [id])
+  name          String
+  description   String?
+  status        String               @default("ACTIVE") // ACTIVE, COMPLETED, ABANDONED
+  createdById   String
+  createdBy     User                 @relation(fields: [createdById], references: [id])
+  createdAt     DateTime             @default(now())
+  
+  contributions EquityContribution[]
+}
+
+model EquityContribution {
+  id              String        @id @default(uuid())
+  projectId       String
+  project         EquityProject @relation(fields: [projectId], references: [id])
+  contributorId   String
+  contributor     User          @relation(fields: [contributorId], references: [id])
+  
+  type            String        // TIME, MONEY, RESOURCE, IDEA, RELATIONSHIP
+  description     String
+  
+  // Slicing Pie Calculation Fields
+  fairMarketValue Float         // The undeniable FMV of the contribution
+  riskMultiplier  Float         // e.g. 2x for cash, 2x for unpaid time
+  slices          Float         // Usually FMV * RiskMultiplier
+  
+  date            DateTime
+  createdAt       DateTime      @default(now())
+}
+

@@ -18,6 +18,7 @@ jest.mock('./prisma', () => {
     event: {
       create: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
       count:   jest.fn(),
     },
     asset: {
@@ -37,6 +38,7 @@ jest.mock('./prisma', () => {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      count: jest.fn(),
     },
     ledgerEntry: {
       create: jest.fn(),
@@ -48,6 +50,32 @@ jest.mock('./prisma', () => {
     },
     keyRotationRequest: {
       create: jest.fn(),
+    },
+    mutedEvent: {
+      upsert: jest.fn(),
+      delete: jest.fn(),
+    },
+    chatMessage: {
+      create: jest.fn(),
+      count: jest.fn(),
+      findMany: jest.fn(),
+    },
+    list: {
+      findMany: jest.fn(),
+      create: jest.fn(),
+    },
+    listItem: {
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
+    equityProject: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
+    equityContribution: {
+      create: jest.fn(),
+      findMany: jest.fn(),
     },
     $transaction: jest.fn().mockImplementation(ops =>
       Array.isArray(ops) ? Promise.all(ops) : ops

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fetchAssetCatalog } from '../lib/api';
 import { decryptAssetMetadata, AssetMetadata, getStoredKeyPair, decryptKeyForUser } from '../lib/crypto';
 import { Asset } from '../models/types';
@@ -22,7 +22,8 @@ export function AssetCatalog({ userId }: { userId: string }) {
   useEffect(() => {
     async function loadAssets() {
       try {
-        const data = await fetchAssetCatalog(userId);
+        const rawData = await fetchAssetCatalog(userId);
+        const data = Array.isArray(rawData) ? rawData : (rawData as any).items || [];
         
         // 0. Load the local identity private key
         const keyPair = await getStoredKeyPair();
@@ -64,7 +65,7 @@ export function AssetCatalog({ userId }: { userId: string }) {
     loadAssets();
   }, [userId]);
 
-  const handleRequestLoan = async (assetId: string) => {
+  const handleRequestLoan = useCallback(async (assetId: string) => {
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 7); // Default 1 week loan
 
@@ -78,7 +79,7 @@ export function AssetCatalog({ userId }: { userId: string }) {
       })
     });
     toast('Loan request sent! The owner will be notified.', 'success');
-  };
+  }, [userId, toast]);
 
   if (loading) return <div className="p-8 text-center text-muted-foreground animate-pulse">Decrypting Community Ledger...</div>;
   if (loadError) return (

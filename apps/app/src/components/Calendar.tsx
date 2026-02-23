@@ -2,6 +2,10 @@
 
 import React, { useMemo } from 'react';
 import { Event, TrustLayer } from '../models/types';
+import { muteEvent, unmuteEvent } from '../lib/api';
+import { useUser } from '../lib/session';
+import { useToast } from './ui/toast';
+import EventChat from './EventChat';
 
 interface Props {
   events: Event[];
@@ -21,6 +25,22 @@ const getLayerLevel = (layer: TrustLayer): number => {
 
 export default function Calendar({ events, viewerLayer }: Props) {
   const viewerLevel = getLayerLevel(viewerLayer);
+  const currentUser = useUser();
+  const { toast } = useToast();
+  
+  const handleToggleMute = async (eventId: string, isCurrentlyMuted: boolean) => {
+    try {
+      if (isCurrentlyMuted) {
+        await unmuteEvent(eventId, currentUser.id);
+        toast('Event un-muted', 'success');
+      } else {
+        await muteEvent(eventId, currentUser.id);
+        toast('Event muted. It will be hidden on refresh.', 'success');
+      }
+    } catch (err) {
+      toast('Failed to change mute state', 'error');
+    }
+  };
 
   const processedEvents = useMemo(() => {
     return events.map(event => {
@@ -53,7 +73,7 @@ export default function Calendar({ events, viewerLayer }: Props) {
       </h2>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {processedEvents.map((event: Record<string, unknown> & { id: string, isAuthorized: boolean, displayTitle: string, startTime: string, endTime: string, location?: string, description?: string, attendees: unknown[], minTrustLayerForDetails: string }) => (
+        {processedEvents.map((event: Event & { isAuthorized: boolean, displayTitle: string, isMuted?: boolean }) => (
            <div 
              key={event.id}
              style={{
@@ -67,26 +87,43 @@ export default function Calendar({ events, viewerLayer }: Props) {
              }}
            >
              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-               <h3 style={{ margin: 0, fontSize: '1.2rem', color: event.isAuthorized ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                 {event.displayTitle}
+               <h3 style={{ margin: 0, fontSize: '1.2rem', color: event.isAuthorized ? 'var(--text-primary)' : 'var(--text-secondary)', textDecoration: event.isMuted ? 'line-through' : 'none' }}>
+                 {event.displayTitle} {event.isMuted && <span style={{fontSize: '0.8rem', opacity: 0.5}}>(Muted)</span>}
                </h3>
-               <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>
-                 {new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
-                 {new Date(event.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-               </span>
+               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                 <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                   {event.startTime && new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
+                   {event.endTime && new Date(event.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                 </span>
+                 <button 
+                   onClick={() => handleToggleMute(event.id, !!event.isMuted)}
+                   style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', padding: '0.2rem 0.5rem', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-secondary)' }}
+                 >
+                   {event.isMuted ? 'Unmute' : 'Mute'}
+                 </button>
+               </div>
              </div>
              
              {event.isAuthorized && (
                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
                  {event.location && <div style={{ marginBottom: '0.25rem' }}>📍 {event.location}</div>}
                  {event.description && <div style={{ marginBottom: '0.5rem' }}>📝 {event.description}</div>}
-                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                   <span>👥 Attendees: </span>
-                   <div style={{ display: 'flex', gap: '0.25rem' }}>
-                     {event.attendees.map((attendee: unknown) => (
-                       <span key={attendee.id} className="badge badge-success">{attendee.name}</span>
-                     ))}
+                 {event.attendees && event.attendees.length > 0 && (
+                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                     <span>👥 Attendees: </span>
+                     <div style={{ display: 'flex', gap: '0.25rem' }}>
+                       {event.attendees.map((attendee) => (
+                         <span key={attendee.id} className="badge badge-success">{attendee.name}</span>
+                       ))}
+                     </div>
                    </div>
+                 )}
+                 
+                 <div style={{ marginTop: '1rem' }}>
+                   <EventChat 
+                     eventId={event.id} 
+                     groupSymmetricKey={{} as CryptoKey} /* Note: Proper key plumbing required from parent context later */
+                   />
                  </div>
                </div>
              )}

@@ -5,6 +5,7 @@ import { Event } from '@/models/types';
 import { useUser } from '@/lib/session';
 import EventCreator from '@/components/EventCreator';
 import EventPollCard from '@/components/EventPollCard';
+import SharedLists from '@/components/SharedLists';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { fetchAuthorizedEvents } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
@@ -14,6 +15,10 @@ export default function PlanningPage() {
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Phase 8.4: Hardcoded Group context for demonstration (similar to Treasury)
+  const PRIMARY_GROUP_ID = '00000000-0000-0000-0000-000000000000';
+  const PRIMARY_GROUP_NAME = 'Kinship Inner Circle';
 
   useEffect(() => {
     async function loadEvents() {
@@ -59,7 +64,15 @@ export default function PlanningPage() {
           <EventCreator currentUser={currentUser} onEventCreated={handleEventCreated} />
         </ErrorBoundary>
 
-        <div>
+        <ErrorBoundary section="Shared Lists">
+          <SharedLists 
+            groupId={PRIMARY_GROUP_ID} 
+            groupName={PRIMARY_GROUP_NAME}
+            groupSymmetricKey={{} as CryptoKey} // Plumbing required alongside actual group context
+          />
+        </ErrorBoundary>
+
+        <div style={{ marginTop: '2rem' }}>
           <h2 style={{ marginBottom: '1.5rem' }}>
             Active Polls
             {pollingEvents.length > 0 && (

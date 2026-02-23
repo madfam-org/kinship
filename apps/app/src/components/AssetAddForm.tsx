@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { createAsset } from '../lib/api';
-import { encryptAssetMetadata, generateGroupSymmetricKey, getStoredKeyPair, generateUserKeyPair, saveKeyPair, encryptKeyForUser } from '../lib/crypto';
+import { createAsset, uploadAssetPhoto } from '../lib/api';
+import { encryptAssetMetadata, generateGroupSymmetricKey, getStoredKeyPair, generateUserKeyPair, saveKeyPair, encryptKeyForUser, encryptBlob } from '../lib/crypto';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -14,7 +14,7 @@ export function AssetAddForm({ userId }: { userId: string }) {
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoBlob, setPhotoBlob] = useState<File | null>(null);
   const [layer, setLayer] = useState('INNER_CIRCLE');
   const [autoApproveLayer, setAutoApproveLayer] = useState('INNER_CIRCLE');
   const [requiresHighCapacity, setRequiresHighCapacity] = useState(false);
@@ -36,15 +36,14 @@ export function AssetAddForm({ userId }: { userId: string }) {
       // 2. Encrypt the sensitive metadata
       const encryptedMetadata = await encryptAssetMetadata({
         name,
-        description,
-        photoUrl
+        description
       }, symmetricKey);
 
       // 3. Asymmetrically wrap the symmetric key for the owner's Public Key
       const wrappedKey = await encryptKeyForUser(symmetricKey, keyPair.publicKey);
 
       // 4. Send securely to the API with the wrapped key envelope
-      await createAsset({
+      const newAsset = await createAsset({
         ownerId: userId,
         encryptedMetadata,
         visibilityLayer: layer,
@@ -54,10 +53,16 @@ export function AssetAddForm({ userId }: { userId: string }) {
         wrappedKeys: [{ userId: userId, encryptedSymmetricKey: wrappedKey }]
       });
 
+      // 5. Encrypt and attach binary photo blob if provided
+      if (photoBlob) {
+        const encryptedPhoto = await encryptBlob(photoBlob, symmetricKey);
+        await uploadAssetPhoto(newAsset.id, encryptedPhoto);
+      }
+
       toast('Asset securely encrypted and cataloged!', 'success');
       setName('');
       setDescription('');
-      setPhotoUrl('');
+      setPhotoBlob(null);
     } catch (error) {
       console.error("Failed to save asset:", error);
       toast('Failed to encrypt and save your asset. Please try again.', 'error');
@@ -99,18 +104,18 @@ export function AssetAddForm({ userId }: { userId: string }) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="asset-photo">Photo URL (Optional)</Label>
+              <Label htmlFor="asset-photo">Photo (Encrypted before upload)</Label>
               <Input 
                 id="asset-photo"
-                placeholder="https://..." 
-                value={photoUrl} 
-                onChange={e => setPhotoUrl(e.target.value)} 
+                type="file"
+                accept="image/*"
+                onChange={e => e.target.files && setPhotoBlob(e.target.files[0])} 
                 className="bg-background/80"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Visibility Ring</Label>
               <Select value={layer} onValueChange={setLayer}>

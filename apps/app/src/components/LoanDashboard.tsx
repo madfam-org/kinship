@@ -63,7 +63,7 @@ export function LoanDashboard({ userId }: { userId: string }) {
     <div style={{ padding: '20px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
       <h3>Loan Management Dashboard</h3>
       
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginTop: '1rem' }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4">
         
         {/* Incoming Requests for My Items */}
         <div>
