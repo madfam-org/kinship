@@ -17,9 +17,9 @@ Instead of tracking everything or nothing, Kinship allows users to explicitly de
 ## Monorepo Architecture
 This repository is configured as an NPM Workspace containing three core services:
 
-1.  **`app/`**: The main Kinship Next.js application containing the Core E2EE logic, scheduling interfaces, and social networking tools.
-2.  **`landing/`**: A public-facing marketing and information site built on Next.js.
-3.  **`api/`**: The foundational backend service (Node.js/Express) that will manage secure public-key transit and encrypted state sync.
+1.  **`apps/app/`**: The main Kinship Next.js application containing the Core E2EE logic, scheduling interfaces, and social networking tools.
+2.  **`apps/landing/`**: A public-facing marketing and information site built on Next.js.
+3.  **`apps/api/`**: The foundational backend service (Node.js/Express) that will manage secure public-key transit and encrypted state sync.
 
 ### Infrastructure & Deployments
 - **DevOps**: Managed via [Enclii](https://github.com/madfam-org/enclii) with auto-provisioned domains (e.g., `app.kinship.madfam.io`).

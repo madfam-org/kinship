@@ -3,9 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "app",
-    "landing",
-    "api"
+    "apps/*"
   ],
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
