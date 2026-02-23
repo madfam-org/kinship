@@ -1,0 +1,23 @@
+apiVersion: enclii.dev/v1
+kind: Service
+metadata:
+  name: kinship-app
+  project: kinship
+spec:
+  build:
+    type: dockerfile
+    dockerfile: ./Dockerfile
+  runtime:
+    port: 3000
+    replicas: 1
+  healthCheck:
+    path: /
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  env:
+    - name: NODE_ENV
+      value: production
+  domains:
+    - name: app.kinship.madfam.io
+      environment: production
+      tlsEnabled: true

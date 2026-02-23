@@ -1,0 +1,15 @@
+{
+  "name": "kinship-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "app",
+    "landing",
+    "api"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  }
+}
