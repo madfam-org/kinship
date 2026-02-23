@@ -20,8 +20,8 @@ This document maps the trajectory of the Kinship platform from foundational proo
 ## Phase 3: Data Persistence & Key Management
 *Focus: Connecting the encrypted state to a persistent datastore.*
 
--   [ ] **PostgreSQL Schema:** Setting up Prisma ORM to model Users, Groups, Devices, and Encrypted Payload envelopes.
--   [ ] **Public Key Directory:** Creating API routes whereby users can securely query other users' public keys to successfully execute the E2EE AES-GCM envelopment.
+-   [x] **PostgreSQL Schema:** Prisma ORM modeling Users, Groups, GroupMemberships, Events, WrappedKeys, Assets, LoanRequests, AssetWrappedKeys, TreasuryPools, and LedgerEntries.
+-   [x] **Public Key Directory:** API routes for users to register and retrieve RSA public keys to execute E2EE AES-GCM envelopment (see `POST /v1/users`, `GET /v1/users/:email`).
 -   [ ] **Push Notifications:** Secure alerts for low-battery pings and event updates.
 -   [ ] **File/Image Attachments:** Extending encryption to binary blobs to support encrypted asset images or receipts.
 
@@ -29,7 +29,7 @@ This document maps the trajectory of the Kinship platform from foundational proo
 *Focus: Moving beyond temporal logistics into economic resource pooling and deep inter-module cohesion to differentiate from siloed market competitors.*
 
 -   [x] **Virtual Asset Inventory:** Securely logging physical assets (tools, gear) available for lending within the vetted trust tiers.
--   [ ] **Collective Treasury:** Internal crowdfunding and highly constrained, transparent ledger systems for community subgroups. 
+-   [x] **Collective Treasury:** Internal crowdfunding module with transparent ledger (`TreasuryPool`, `LedgerEntry`), atomic pledge transactions, and auto-FUNDED status promotion.
 -   [ ] **Non-Hierarchical Workflow Boards:** Consensus-based task assignment mimicking a circular economy logic rather than top-down corporate management.
 -   [ ] **Sweat Equity Tracking:** A "Slicing Pie" dynamic equity model to fairly quantify and review non-monetary operations in community projects.
 

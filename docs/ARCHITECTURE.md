@@ -34,6 +34,11 @@ The `Event` data model includes an unencrypted boolean toggle: `broadcastBusySta
 If `true`, the unencrypted database row contains the `startTime` and `endTime` but **not** the event title or location. Thus, outer rings see a generic "Busy" block allowing scheduling without violating privacy.
 
 ## 3. Deployment Stack
-- **Frontend / Monorepo:** Next.js (App Router), React 19, Vanilla CSS (Design decision to avoid heavy utility frameworks).
+- **Frontend / Monorepo:** Next.js (App Router), React 19, Tailwind CSS + Shadcn UI primitives.
 - **Backend Infrastructure:** Node.js/Express, deployed via Enclii.
 - **Identity:** Janua SSO integration handles the `AuthN` barrier before the `AuthZ` cryptographic barrier is engaged.
+- **Database:** PostgreSQL (via Prisma ORM). Schema at `apps/api/prisma/schema.prisma`.
+
+## 4. Agent & LLM Interoperability
+
+This repo follows the [`llms.txt`](https://llmstxt.org/) standard. Before working in this codebase, read the root [`llms.txt`](../llms.txt) file. It documents all critical invariants (e.g., never store plaintext, private keys never leave the browser), the Trust Tier hierarchy, and maps every important source file.

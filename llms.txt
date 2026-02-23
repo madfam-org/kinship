@@ -1,0 +1,61 @@
+# Kinship
+
+> A secure, end-to-end encrypted (E2EE) platform for navigating complex logistics, social capacity, shared assets, and community economics within enmeshed, trust-layered communities. Designed for polycules, intentional communities, chosen families, and cooperative communities.
+
+Kinship is a privacy-first, zero-trust web platform organized as an NPM workspace monorepo (Node.js 20+). It uses the native browser WebCrypto API (`window.crypto.subtle`) — never third-party crypto libraries — to ensure all sensitive data is encrypted client-side before it ever reaches the server.
+
+**Key architectural invariants for any agent working in this codebase:**
+- The backend (`apps/api`) stores only encrypted blobs and public keys. It never processes plaintext event details, asset metadata, or user messages.
+- The private RSA-OAEP key generated per user **never leaves the browser** — it is stored non-extractably in IndexedDB.
+- All API responses follow a consistent shape: `{ ...data }` on success, `{ error: "message" }` on failure.
+- Pre-commit hooks (Husky) run `npm test` on every commit and block files over 800 lines.
+- Auth is handled by Janua SSO (OIDC/RS256 JWT). The private NPM registry `npm.madfam.io` requires the `NPM_MADFAM_TOKEN` env variable.
+
+**Monorepo layout:**
+- `apps/api/` — Express.js REST API + Prisma ORM (PostgreSQL)
+- `apps/app/` — Next.js 16 frontend (React 19, Tailwind CSS, Shadcn UI)
+- `apps/landing/` — Public marketing site (Next.js)
+- `docs/` — Architecture, roadmap, manifesto, competitive benchmark
+
+**Trust Tier constants used throughout the codebase:**
+`INNER_CIRCLE` > `EXTENDED_POLYCULE` > `OUTER_RING` > `FRIENDS_OF_FRIENDS`
+
+## Docs
+
+- [README](https://github.com/madfam-org/kinship/blob/main/README.md): Quick-start, monorepo overview, environment setup instructions
+- [Architecture & E2EE Guide](https://github.com/madfam-org/kinship/blob/main/docs/ARCHITECTURE.md): Cryptographic model (RSA-OAEP + AES-GCM), Busy Broadcast pattern, deployment stack
+- [Product Requirements (PRD)](https://github.com/madfam-org/kinship/blob/main/PRD.md): Full feature requirements, user stories, security non-functional requirements
+- [Roadmap](https://github.com/madfam-org/kinship/blob/main/docs/ROADMAP.md): Current phase completion status; next planned modules (Workflow Boards, Sweat Equity, Pod Federation)
+- [Manifesto](https://github.com/madfam-org/kinship/blob/main/docs/MANIFESTO.md): Privacy principles and User Bill of Rights that inform every product decision
+
+## Backend API (`apps/api`)
+
+- [API Entry Point](https://github.com/madfam-org/kinship/blob/main/apps/api/index.js): All Express routes — Users, Groups, Events, Assets, Loan Requests, Collective Treasury. Run with `node index.js` or `npm run dev`.
+- [Prisma Schema](https://github.com/madfam-org/kinship/blob/main/apps/api/prisma/schema.prisma): Full PostgreSQL schema: `User`, `Group`, `GroupMembership`, `Event`, `WrappedKey`, `Asset`, `LoanRequest`, `AssetWrappedKey`, `TreasuryPool`, `LedgerEntry`
+- [API Test Suite](https://github.com/madfam-org/kinship/blob/main/apps/api/index.test.js): 37 Jest + Supertest tests covering all endpoints; achieves 81%+ statement coverage
+- [Crypto Validation Tests](https://github.com/madfam-org/kinship/blob/main/apps/api/crypto.test.js): Node.js WebCrypto-equivalent tests proving AES-GCM encrypt/decrypt and RSA-OAEP key-wrapping math
+- [Prisma Mock Singleton](https://github.com/madfam-org/kinship/blob/main/apps/api/singleton.js): Jest mock for Prisma client — extend this when adding new models
+
+## Frontend (`apps/app`)
+
+- [Crypto Utilities](https://github.com/madfam-org/kinship/blob/main/apps/app/src/lib/crypto.ts): All client-side WebCrypto functions: `generateUserKeyPair`, `getStoredKeyPair`, `saveKeyPair`, `generateGroupSymmetricKey`, `encryptAssetMetadata`, `decryptAssetMetadata`, `encryptKeyForUser`, `decryptKeyForUser`
+- [API Client](https://github.com/madfam-org/kinship/blob/main/apps/app/src/lib/api.ts): Type-safe fetch wrappers for every backend route group: Users, Events, Assets, Treasury
+- [Main App Page](https://github.com/madfam-org/kinship/blob/main/apps/app/src/app/page.tsx): Root page wiring all feature tabs (Calendar, Planning, Inventory) with ErrorBoundary isolation per section
+- [AssetAddForm](https://github.com/madfam-org/kinship/blob/main/apps/app/src/components/AssetAddForm.tsx): Generates RSA keypair, encrypts asset metadata with AES-GCM, wraps symmetric key with owner's public key before POST
+- [AssetCatalog](https://github.com/madfam-org/kinship/blob/main/apps/app/src/components/AssetCatalog.tsx): Fetches assets, retrieves user's AssetWrappedKey, unwraps symmetric key via private RSA key, decrypts and renders metadata
+- [TreasuryDashboard](https://github.com/madfam-org/kinship/blob/main/apps/app/src/components/TreasuryDashboard.tsx): Collective Treasury UI — campaign progress bars, pledge form, transparent ledger list
+- [LoanDashboard](https://github.com/madfam-org/kinship/blob/main/apps/app/src/components/LoanDashboard.tsx): Borrower/lender view of loan requests with APPROVE/REJECT/RETURN actions
+- [ErrorBoundary](https://github.com/madfam-org/kinship/blob/main/apps/app/src/components/ErrorBoundary.tsx): Class-based React error boundary used to isolate per-section render failures with Try Again recovery
+- [Toast Notifications](https://github.com/madfam-org/kinship/blob/main/apps/app/src/components/ui/toast.tsx): Context-based toast system (`useToast` hook). Variants: `success`, `error`, `warning`, `info`
+
+## Developer Tooling
+
+- [Pre-commit hooks](https://github.com/madfam-org/kinship/blob/main/.husky/pre-commit): Runs full test suite; blocks commit if tests fail
+- [File size guard](https://github.com/madfam-org/kinship/blob/main/.husky/check-size.sh): Warns at >600 lines, errors/blocks at >800 lines on any staged file (excludes `node_modules`, `.prisma`, `package-lock.json`)
+- [Root package.json](https://github.com/madfam-org/kinship/blob/main/package.json): Workspace root with `dev`, `build`, `lint` scripts that cascade to all apps
+
+## Optional
+
+- [Competitive Benchmark](https://github.com/madfam-org/kinship/blob/main/docs/BENCHMARK.md): Market analysis comparing Kinship to Calendly, Cozi, Google Calendar, Doodle — informs strategic differentiators
+- [Shadcn UI Components](https://github.com/madfam-org/kinship/tree/main/apps/app/src/components/ui): Badge (with Trust Layer variants: `inner`, `polycule`, `outer`, `fof`), Button, Card, Input, Label, Select, Progress — all vanilla Shadcn primitives
+- [Tailwind Config](https://github.com/madfam-org/kinship/blob/main/apps/app/tailwind.config.js): Custom Trust Layer CSS variables (`trust-inner`, `trust-polycule`, `trust-outer`, `trust-fof`) and Organic Dark Mode palette

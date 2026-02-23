@@ -43,3 +43,23 @@ For detailed insights into the project trajectory and technical decisions:
 - [Roadmap](docs/ROADMAP.md)
 - [Architecture & E2EE Guidelines](docs/ARCHITECTURE.md)
 - [Original Product Requirements (PRD)](PRD.md)
+- [Manifesto & User Bill of Rights](docs/MANIFESTO.md)
+- [Competitive Benchmark](docs/BENCHMARK.md)
+
+## Agent & LLM Interoperability
+
+Kinship follows the [llmstxt.org](https://llmstxt.org/) standard to make this codebase agent-friendly across the MADFAM ecosystem and beyond.
+
+**For AI agents, copilots, or LLMs working in this repository:**
+
+```
+# Read this first — it tells you what this repo is, what it does,
+# and the key architectural invariants you must not violate.
+curl https://raw.githubusercontent.com/madfam-org/kinship/main/llms.txt
+```
+
+The [`llms.txt`](./llms.txt) file at the repo root provides:
+- A structured map of every important file in the codebase
+- Key invariants (never store plaintext, private key never leaves browser)
+- Trust tier constants used throughout the code
+- Links to docs, schema, API routes, and test suites
