@@ -26,9 +26,14 @@ This document maps the trajectory of the Kinship platform from foundational proo
 -   [ ] **File/Image Attachments:** Extending encryption to binary blobs to support encrypted asset images or receipts.
 
 ## Phase 4: Long-Term Objectives (Enterprise & Community)
-*Focus: Moving beyond temporal logistics into economic resource pooling.*
+*Focus: Moving beyond temporal logistics into economic resource pooling and deep inter-module cohesion to differentiate from siloed market competitors.*
 
--   [ ] **Virtual Asset Inventory:** Securely logging physical assets (tools, gear) available for lending within the vetted trust tiers.
+-   [x] **Virtual Asset Inventory:** Securely logging physical assets (tools, gear) available for lending within the vetted trust tiers.
 -   [ ] **Sweat Equity Tracking:** A "Slicing Pie" dynamic equity model to fairly quantify and review non-monetary operations in community projects.
 -   [ ] **Collective Treasury:** Internal crowdfunding and highly constrained, transparent ledger systems for community subgroups. 
 -   [ ] **Non-Hierarchical Workflow Boards:** Consensus-based task assignment mimicking a circular economy logic rather than top-down corporate management.
+
+### Strategic Market Vectors (Derived from Benchmark)
+-   [ ] **Inter-Module Automation:** Tying the "Social Battery" directly to cooperative features (e.g. automatically blocking heavy task assignments when capacity is critically low).
+-   [ ] **Trust-Layered Economy:** Establishing dynamic, zero-trust rules for the asset inventory (e.g. lending conditions or visibility strictly based on your cryptographic "Shell of Trust").
+-   [ ] **Pod Federation:** Enabling independent Kinship cooperative deployments to federate, scaling the asset and gig economy across networks without centralizing data.
