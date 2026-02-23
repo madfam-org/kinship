@@ -21,6 +21,8 @@ model User {
   groups    Group[]  @relation("GroupMembers")
   hostedEvents Event[] @relation("EventHost")
   wrappedKeys   WrappedKey[]
+  assets        Asset[]  @relation("AssetOwner")
+  loanRequests  LoanRequest[] @relation("Borrower")
 }
 
 model Group {
@@ -28,6 +30,7 @@ model Group {
   name        String
   members     User[]   @relation("GroupMembers")
   events      Event[]
+  assets      Asset[]
 }
 
 model Event {
@@ -82,4 +85,31 @@ model WrappedKey {
   encryptedSymmetricKey  String // Group Symmetric Key encrypted with User's Public Key (Base64)
 
   @@unique([eventId, userId])
+}
+
+model Asset {
+  id               String   @id @default(uuid())
+  ownerId          String
+  owner            User     @relation("AssetOwner", fields: [ownerId], references: [id])
+  groupId          String?
+  group            Group?   @relation(fields: [groupId], references: [id])
+
+  // Encrypted Metadata (Name, Description, Photo URL)
+  encryptedMetadata String?  // Base64 AES-GCM blob
+
+  status           String    @default("AVAILABLE") // AVAILABLE, LENT, MAINTENANCE
+  visibilityLayer  String    // INNER_CIRCLE, OUTER_RING, etc.
+
+  loanRequests     LoanRequest[]
+}
+
+model LoanRequest {
+  id         String   @id @default(uuid())
+  assetId    String
+  asset      Asset    @relation(fields: [assetId], references: [id])
+  borrowerId String
+  borrower   User     @relation("Borrower", fields: [borrowerId], references: [id])
+  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED
+  dueDate    DateTime?
+  createdAt  DateTime @default(now())
 }
