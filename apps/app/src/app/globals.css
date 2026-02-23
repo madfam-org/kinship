@@ -50,3 +50,227 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ======================================================================
+   Kinship Shell — Responsive Layout (Phase 7.2)
+   Mobile-first: single column below 768px, bottom nav below 640px.
+   ====================================================================== */
+
+/* Shell wrapper */
+.kinship-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.kinship-shell__content {
+  flex: 1;
+  padding-top: 4rem; /* offset for top nav */
+}
+
+/* ---- Top navigation bar ---- */
+.kinship-topnav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  background: color-mix(in srgb, hsl(var(--background)) 90%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.kinship-topnav__brand {
+  flex-shrink: 0;
+}
+
+.kinship-topnav__links {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0.25rem;
+}
+
+.kinship-topnav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: hsl(var(--muted-foreground));
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+}
+
+.kinship-topnav__link:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--secondary));
+}
+
+.kinship-topnav__link--active {
+  color: hsl(var(--foreground));
+  background: hsl(var(--secondary));
+  font-weight: 600;
+}
+
+/* ---- Bottom navigation bar (mobile only) ---- */
+.kinship-bottomnav {
+  display: none; /* hidden on desktop */
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: 3.5rem;
+  background: color-mix(in srgb, hsl(var(--background)) 95%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid hsl(var(--border));
+  justify-content: space-around;
+  align-items: center;
+}
+
+.kinship-bottomnav__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  flex: 1;
+  padding: 0.3rem 0;
+  text-decoration: none;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.65rem;
+  transition: color 0.15s;
+}
+
+.kinship-bottomnav__item--active {
+  color: var(--trust-inner);
+}
+
+.kinship-bottomnav__icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.kinship-bottomnav__label {
+  font-size: 0.6rem;
+  font-weight: 500;
+}
+
+.kinship-bottomnav-spacer {
+  display: none;
+  height: 3.5rem;
+}
+
+/* ---- Page layout utilities ---- */
+.kinship-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 2rem;
+}
+
+/* Two-column layout: sidebar + main */
+.kinship-two-col {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(300px, 2fr);
+  gap: 2rem;
+  align-items: start;
+}
+
+.kinship-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.kinship-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.kinship-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.kinship-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  padding: 0 0.35rem;
+  margin-left: 0.5rem;
+  border-radius: 999px;
+  background: var(--trust-inner);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.kinship-divider {
+  border: none;
+  border-top: 2px dashed hsl(var(--border));
+}
+
+.kinship-loading {
+  text-align: center;
+  padding: 3rem 0;
+  color: hsl(var(--muted-foreground));
+}
+
+.kinship-alert-banner {
+  position: fixed;
+  top: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--destructive, #dc2626);
+  color: white;
+  padding: 0.75rem 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4);
+  z-index: 200;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* ======================================================================
+   Mobile breakpoints
+   ====================================================================== */
+@media (max-width: 768px) {
+  .kinship-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .kinship-topnav__links {
+    display: none; /* use bottom nav on mobile */
+  }
+
+  .kinship-page {
+    padding: 1rem 1rem 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .kinship-bottomnav {
+    display: flex;
+  }
+
+  .kinship-bottomnav-spacer {
+    display: block;
+  }
+
+  .kinship-shell__content {
+    padding-top: 3.5rem;
+  }
+}
+

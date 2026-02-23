@@ -22,11 +22,12 @@ export async function generateGroupSymmetricKey(): Promise<CryptoKey> {
 }
 
 // Generate the user's asymmetric RSA-OAEP KeyPair
+// 4096-bit modulus is the minimum recommended size for long-lived device identity keys.
 export async function generateUserKeyPair(): Promise<CryptoKeyPair> {
   return typeof window !== 'undefined' ? await window.crypto.subtle.generateKey(
     {
       name: "RSA-OAEP",
-      modulusLength: 2048,
+      modulusLength: 4096,
       publicExponent: new Uint8Array([1, 0, 1]),
       hash: "SHA-256",
     },
@@ -215,3 +216,43 @@ export async function decryptAssetMetadata(encryptedBase64: string, groupSymmetr
   return JSON.parse(new TextDecoder().decode(decryptedContent));
 }
 
+// --- Generic Text Encryption (Phase 5.2 — Poll Options) ---
+
+/**
+ * Encrypt an arbitrary plaintext string with an AES-GCM key.
+ * Returns IV‖ciphertext as a single Base64 string (same pattern as encryptAssetMetadata).
+ * Used by EventCreator to encrypt poll option labels before sending to the server.
+ */
+export async function encryptText(plaintext: string, key: CryptoKey): Promise<string> {
+  const data = new TextEncoder().encode(plaintext);
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+  const encryptedContent = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    data
+  );
+
+  const combined = new Uint8Array(iv.length + encryptedContent.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encryptedContent), iv.length);
+  return bufferToBase64(combined.buffer);
+}
+
+/**
+ * Decrypt a Base64-encoded IV‖ciphertext string with an AES-GCM key.
+ * Used by EventPollCard to decrypt poll option labels retrieved from the server.
+ */
+export async function decryptText(encryptedBase64: string, key: CryptoKey): Promise<string> {
+  const combined = new Uint8Array(base64ToBuffer(encryptedBase64));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+
+  const decryptedContent = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    ciphertext
+  );
+
+  return new TextDecoder().decode(decryptedContent);
+}

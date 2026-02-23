@@ -1,5 +1,6 @@
 const express = require('express');
 const prisma = require('./prisma');
+const authMiddleware = require('./middleware/auth');
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -15,6 +16,9 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+
+// Auth: validate Bearer JWT on every route except / and POST /v1/users (see middleware/auth.js)
+app.use(authMiddleware);
 
 // Healthcheck endpoint for Enclii probes
 app.get('/', (req, res) => {
@@ -59,21 +63,60 @@ app.get('/v1/users/:email', async (req, res) => {
   }
 });
 
-// Get User Network (users they share a group with)
+// --- SSE Connection Store (Phase 6.4) ---
+// In-memory map of userId -> Set of active SSE Response objects.
+// Fan-out helpers send typed SSE events to all open connections for a user.
+const sseConnections = new Map();
+
+function sseSubscribe(userId, res) {
+  if (!sseConnections.has(userId)) sseConnections.set(userId, new Set());
+  sseConnections.get(userId).add(res);
+}
+
+function sseUnsubscribe(userId, res) {
+  sseConnections.get(userId)?.delete(res);
+}
+
+function sseFanOut(userIds, eventName, data) {
+  const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const uid of userIds) {
+    sseConnections.get(uid)?.forEach(res => res.write(payload));
+  }
+}
+
+// --- SSE Stream Endpoint ---
+// GET /v1/events/stream/:userId — establishes a persistent SSE connection.
+// Clients receive: battery-alert, new-event
+app.get('/v1/events/stream/:userId', (req, res) => {
+  const { userId } = req.params;
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  // Send a heartbeat comment every 25s to keep proxies from closing the connection
+  const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 25000);
+  heartbeat.unref(); // Allow process to exit cleanly in tests without waiting for next tick
+
+  sseSubscribe(userId, res);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseUnsubscribe(userId, res);
+  });
+});
+
+// Get User Network (users they share a group with) — 6.2: single Prisma query (was N+1)
 app.get('/v1/users/:userId/network', async (req, res) => {
   const { userId } = req.params;
   try {
+    // Single query: find users who share at least one group with userId
+    // Previously required two round-trips (groupMembership.findMany then user.findMany with groupId.in)
     const users = await prisma.user.findMany({
       where: {
         id: { not: userId },
         memberships: {
           some: {
-            groupId: {
-              in: (await prisma.groupMembership.findMany({
-                where: { userId },
-                select: { groupId: true }
-              })).map(g => g.groupId)
-            }
+            group: { memberships: { some: { userId } } }
           }
         }
       },
@@ -85,7 +128,7 @@ app.get('/v1/users/:userId/network', async (req, res) => {
   }
 });
 
-// Update User Social Battery (Inter-Module Automation)
+// Update User Social Battery (Inter-Module Automation + SSE fan-out for alerts)
 app.patch('/v1/users/:id/battery', async (req, res) => {
   const { id } = req.params;
   const { level } = req.body;
@@ -94,6 +137,26 @@ app.patch('/v1/users/:id/battery', async (req, res) => {
       where: { id },
       data: { socialBattery: level, batteryLastUpdate: new Date() }
     });
+
+    // 6.4: If battery drops below 20, fan-out a battery-alert to this user's network connections
+    if (typeof level === 'number' && level < 20) {
+      const networkMembers = await prisma.user.findMany({
+        where: {
+          id: { not: id },
+          memberships: { some: { group: { memberships: { some: { userId: id } } } } }
+        },
+        select: { id: true }
+      });
+      const networkIds = networkMembers.map(u => u.id);
+      // Also notify the user themselves (so their own devices update)
+      sseFanOut([id, ...networkIds], 'battery-alert', {
+        userId: id,
+        email: user.email,
+        level,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     res.send(user);
   } catch (error) {
     res.status(500).send({ error: error.message });
@@ -146,7 +209,8 @@ app.post('/v1/events', async (req, res) => {
     endTime, 
     minTrustLayer, 
     encryptedPayload, 
-    wrappedKeys // Array of { userId, encryptedSymmetricKey }
+    wrappedKeys, // Array of { userId, encryptedSymmetricKey }
+    pollOptions  // Array of { type, encryptedValue } — Phase 5.2
   } = req.body;
 
   try {
@@ -159,10 +223,19 @@ app.post('/v1/events', async (req, res) => {
         encryptedPayload,
         wrappedKeys: {
           create: wrappedKeys || []
+        },
+        // 5.2: persist encrypted poll options if provided
+        pollOptions: {
+          create: (pollOptions || []).map(opt => ({
+            type: opt.type || 'TIME',
+            encryptedValue: opt.encryptedValue || null,
+            value: '' // deprecated field; kept for schema compatibility
+          }))
         }
       },
       include: {
-        wrappedKeys: true
+        wrappedKeys: true,
+        pollOptions: true
       }
     });
     res.send(event);
@@ -172,61 +245,46 @@ app.post('/v1/events', async (req, res) => {
   }
 });
 
-// Get events for a user
+// Get events for a user — 6.1: paginated
 // Returns events where user is host, holds a WrappedKey, OR the event broadcasts "busy" and the host shares a group.
 app.get('/v1/events/authorized/:userId', async (req, res) => {
   const { userId } = req.params;
+  const limit  = Math.min(parseInt(req.query.limit  || '50', 10), 200);
+  const offset = Math.max(parseInt(req.query.offset || '0',  10), 0);
   try {
-    // 1. Get IDs of all groups the user is a member of
     const userGroups = await prisma.groupMembership.findMany({
-      where: { userId },
-      select: { groupId: true }
+      where: { userId }, select: { groupId: true }
     });
     const groupIds = userGroups.map(g => g.groupId);
 
-    const authorizedEvents = await prisma.event.findMany({
-      where: {
-        OR: [
-          { hostId: userId },
-          { wrappedKeys: { some: { userId } } },
-          { 
-            broadcastBusy: true,
-            host: {
-              memberships: {
-                some: {
-                  groupId: { in: groupIds }
-                }
-              }
-            }
-          }
-        ]
-      },
-      include: {
-        wrappedKeys: {
-          where: { userId }
-        }
-      }
-    });
+    const whereClause = {
+      OR: [
+        { hostId: userId },
+        { wrappedKeys: { some: { userId } } },
+        { broadcastBusy: true, host: { memberships: { some: { groupId: { in: groupIds } } } } }
+      ]
+    };
 
-    // Strip encrypted payloads from events where the user is NOT the host and DOES NOT hold a wrapped key
-    // i.e., they are only seeing a "Busy Broadcast" from a network connection
+    const [total, authorizedEvents] = await prisma.$transaction([
+      prisma.event.count({ where: whereClause }),
+      prisma.event.findMany({
+        where: whereClause,
+        include: { wrappedKeys: { where: { userId } }, pollOptions: true },
+        skip: offset,
+        take: limit
+      })
+    ]);
+
     const sanitizedEvents = authorizedEvents.map(event => {
       const isHost = event.hostId === userId;
       const hasWrappedKey = event.wrappedKeys && event.wrappedKeys.length > 0;
-      
       if (!isHost && !hasWrappedKey) {
-         // It's a busy broadcast only. Strip sensitive payload entirely to enforce Zero Trust
-         return {
-           ...event,
-           encryptedPayload: null, 
-           // Technically we still need Title for the frontend Event model, but we set it blank here
-           // as a safety mechanism, even if encrypted Payload is null. Calendar.tsx handles "Busy".
-         };
+        return { ...event, encryptedPayload: null, startTime: null, endTime: null, pollOptions: [] };
       }
       return event;
     });
 
-    res.send(sanitizedEvents);
+    res.send({ data: sanitizedEvents, meta: { total, limit, offset } });
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
@@ -258,46 +316,37 @@ app.post('/v1/assets', async (req, res) => {
   }
 });
 
-// Fetch Asset Catalog for a User
-// Returns assets owned by user or shared within a common group
+// Fetch Asset Catalog for a User — 6.1: paginated
 app.get('/v1/assets/catalog/:userId', async (req, res) => {
   const { userId } = req.params;
+  const limit  = Math.min(parseInt(req.query.limit  || '50', 10), 200);
+  const offset = Math.max(parseInt(req.query.offset || '0',  10), 0);
   try {
-    // 1. Find all groups this user belongs to
     const userGroups = await prisma.groupMembership.findMany({
-       where: { userId },
-       select: { groupId: true }
+      where: { userId }, select: { groupId: true }
     });
     const groupIds = userGroups.map(g => g.groupId);
 
-    // 2. Query assets owned by user OR assigned to a group the user is in
-    const assets = await prisma.asset.findMany({
-      where: {
-        OR: [
-          { ownerId: userId },
-          { groupId: { in: groupIds } }
-        ]
-      },
+    const whereClause = { OR: [{ ownerId: userId }, { groupId: { in: groupIds } }] };
+
+    const allAssets = await prisma.asset.findMany({
+      where: whereClause,
       include: {
         owner: { select: { email: true, socialBattery: true } },
         group: { select: { name: true } },
-        wrappedKeys: {
-          where: { userId }
-        }
+        wrappedKeys: { where: { userId } }
       }
     });
 
-    // Inter-Module Automation: Filter out assets that require high capacity 
-    // if the owner's social battery is critically low (< 20). Protects owner from burnout.
-    const filteredAssets = assets.filter(asset => {
-      // If the owner's battery is known, less than 20, and the asset requires high capacity, hide it.
-      if (asset.requiresHighCapacity && asset.owner.socialBattery !== null && asset.owner.socialBattery < 20) {
-        return false;
-      }
+    // Inter-Module Automation: hide high-capacity assets when owner battery < 20
+    const filteredAssets = allAssets.filter(asset => {
+      if (asset.requiresHighCapacity && asset.owner.socialBattery !== null && asset.owner.socialBattery < 20) return false;
       return true;
     });
 
-    res.send(filteredAssets);
+    const total = filteredAssets.length;
+    const pageData = filteredAssets.slice(offset, offset + limit);
+    res.send({ data: pageData, meta: { total, limit, offset } });
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
@@ -345,28 +394,27 @@ app.post('/v1/loan-requests', async (req, res) => {
   }
 });
 
-// Get Loan Requests for a User (Borrowed by them OR Requested of their assets)
+// Get Loan Requests for a User (Borrowed by them OR Requested of their assets) — 6.1: paginated
 app.get('/v1/loan-requests/:userId', async (req, res) => {
   const { userId } = req.params;
+  const limit  = Math.min(parseInt(req.query.limit  || '50', 10), 200);
+  const offset = Math.max(parseInt(req.query.offset || '0',  10), 0);
   try {
-    const loans = await prisma.loanRequest.findMany({
-      where: {
-        OR: [
-          { borrowerId: userId },
-          { asset: { ownerId: userId } }
-        ]
-      },
-      include: {
-        asset: {
-          select: { id: true, ownerId: true, encryptedMetadata: true, status: true }
+    const whereClause = { OR: [{ borrowerId: userId }, { asset: { ownerId: userId } }] };
+    const [total, loans] = await prisma.$transaction([
+      prisma.loanRequest.count({ where: whereClause }),
+      prisma.loanRequest.findMany({
+        where: whereClause,
+        include: {
+          asset: { select: { id: true, ownerId: true, encryptedMetadata: true, status: true } },
+          borrower: { select: { email: true } }
         },
-        borrower: {
-          select: { email: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-    res.send(loans);
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit
+      })
+    ]);
+    res.send({ data: loans, meta: { total, limit, offset } });
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
@@ -434,18 +482,24 @@ app.post('/v1/treasury/pools', async (req, res) => {
   }
 });
 
-// Get all Treasury Pools for a Group
+// Get all Treasury Pools for a Group — 6.1: paginated
 app.get('/v1/treasury/pools/:groupId', async (req, res) => {
   const { groupId } = req.params;
+  const limit  = Math.min(parseInt(req.query.limit  || '50', 10), 200);
+  const offset = Math.max(parseInt(req.query.offset || '0',  10), 0);
   try {
-    const pools = await prisma.treasuryPool.findMany({
-      where: { groupId },
-      include: {
-        _count: { select: { ledgerEntries: true } }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-    res.send(pools);
+    const whereClause = { groupId };
+    const [total, pools] = await prisma.$transaction([
+      prisma.treasuryPool.count({ where: whereClause }),
+      prisma.treasuryPool.findMany({
+        where: whereClause,
+        include: { _count: { select: { ledgerEntries: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit
+      })
+    ]);
+    res.send({ data: pools, meta: { total, limit, offset } });
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
@@ -486,23 +540,83 @@ app.post('/v1/treasury/pledge', async (req, res) => {
   }
 });
 
-// Get the transparent ledger for a specific Pool
+// Get the transparent ledger for a specific Pool — 6.1: paginated
 app.get('/v1/treasury/pools/:poolId/ledger', async (req, res) => {
   const { poolId } = req.params;
+  const limit  = Math.min(parseInt(req.query.limit  || '50', 10), 200);
+  const offset = Math.max(parseInt(req.query.offset || '0',  10), 0);
   try {
-    const pool = await prisma.treasuryPool.findUnique({
-      where: { id: poolId },
+    const pool = await prisma.treasuryPool.findUnique({ where: { id: poolId } });
+    if (!pool) return res.status(404).send({ error: 'Pool not found' });
+
+    const [total, ledgerEntries] = await prisma.$transaction([
+      prisma.ledgerEntry.count({ where: { poolId } }),
+      prisma.ledgerEntry.findMany({
+        where: { poolId },
+        include: { contributor: { select: { email: true } } },
+        orderBy: { createdAt: 'asc' },
+        skip: offset,
+        take: limit
+      })
+    ]);
+
+    res.send({ data: { ...pool, ledgerEntries }, meta: { total, limit, offset } });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// --- Key Rotation (Phase 5.5) ---
+
+// Initiate a key rotation: creates a KeyRotationRequest signal and returns
+// all current group member public keys so the client can re-wrap the group symmetric key.
+app.post('/v1/groups/:id/rotate-keys', async (req, res) => {
+  const { id: groupId } = req.params;
+  const { requestedByUserId } = req.body;
+  if (!requestedByUserId) return res.status(400).send({ error: 'requestedByUserId is required' });
+
+  try {
+    // Create signal record
+    const rotationRequest = await prisma.keyRotationRequest.create({
+      data: { groupId, requestedByUserId }
+    });
+
+    // Fetch all current group memberships with their public keys so the client can re-wrap
+    const members = await prisma.groupMembership.findMany({
+      where: { groupId },
       include: {
-        ledgerEntries: {
-          include: {
-            contributor: { select: { email: true } }
-          },
-          orderBy: { createdAt: 'asc' }
-        }
+        user: { select: { id: true, email: true, publicKey: true } }
       }
     });
-    if (!pool) return res.status(404).send({ error: 'Pool not found' });
-    res.send(pool);
+
+    res.send({ rotationRequest, members: members.map(m => m.user) });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Accept a batch of re-wrapped keys for all events in a group.
+// The client re-encrypts the group's AES-GCM symmetric key with each member's current RSA public key.
+app.post('/v1/groups/:id/wrapped-keys', async (req, res) => {
+  const { id: groupId } = req.params;
+  const { wrappedKeys } = req.body; // Array of { eventId, userId, encryptedSymmetricKey }
+
+  if (!wrappedKeys || !Array.isArray(wrappedKeys) || wrappedKeys.length === 0) {
+    return res.status(400).send({ error: 'wrappedKeys array is required' });
+  }
+
+  try {
+    // Upsert each wrapped key — replace existing entries for this (eventId, userId) pair
+    const upserts = wrappedKeys.map(({ eventId, userId, encryptedSymmetricKey }) =>
+      prisma.wrappedKey.upsert({
+        where: { eventId_userId: { eventId, userId } },
+        update: { encryptedSymmetricKey },
+        create: { eventId, userId, encryptedSymmetricKey }
+      })
+    );
+
+    const results = await prisma.$transaction(upserts);
+    res.send({ updated: results.length });
   } catch (error) {
     res.status(500).send({ error: error.message });
   }

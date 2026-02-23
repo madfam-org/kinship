@@ -25,15 +25,17 @@ model User {
   assets           Asset[]          @relation("AssetOwner")
   loanRequests     LoanRequest[]    @relation("Borrower")
   ledgerEntries    LedgerEntry[]
+  keyRotationRequests KeyRotationRequest[] @relation("KeyRotationRequests")
 }
 
 model Group {
-  id             String          @id @default(uuid())
-  name           String
-  memberships    GroupMembership[]
-  events         Event[]
-  assets         Asset[]
-  treasuryPools  TreasuryPool[]
+  id                  String               @id @default(uuid())
+  name                String
+  memberships         GroupMembership[]
+  events              Event[]
+  assets              Asset[]
+  treasuryPools       TreasuryPool[]
+  keyRotationRequests KeyRotationRequest[]
 }
 
 model GroupMembership {
@@ -70,16 +72,19 @@ model Event {
 }
 
 model PollOption {
-  id        String   @id @default(uuid())
-  eventId   String
-  event     Event    @relation(fields: [eventId], references: [id])
-  type      String   // "TIME" or "LOCATION"
-  
-  // If the option itself is encrypted, this would be a blob. 
-  // For now, storing as string for the POC.
-  value     String   
-  
-  votes     Vote[]
+  id             String   @id @default(uuid())
+  eventId        String
+  event          Event    @relation(fields: [eventId], references: [id])
+  type           String   // "TIME" or "LOCATION"
+
+  // DEPRECATED: plaintext value — only kept for backward compatibility with existing rows.
+  // New records must use encryptedValue instead.
+  value          String   @default("")
+
+  // AES-GCM encrypted option label (IV prepended, Base64). Encrypted with the event's group symmetric key.
+  encryptedValue String?
+
+  votes          Vote[]
 }
 
 model Vote {
@@ -91,12 +96,13 @@ model Vote {
 }
 
 model WrappedKey {
-  id                     String @id @default(uuid())
+  id                     String   @id @default(uuid())
   eventId                String
-  event                  Event  @relation(fields: [eventId], references: [id])
+  event                  Event    @relation(fields: [eventId], references: [id])
   userId                 String
-  user                   User   @relation(fields: [userId], references: [id])
-  encryptedSymmetricKey  String // Group Symmetric Key encrypted with User's Public Key (Base64)
+  user                   User     @relation(fields: [userId], references: [id])
+  encryptedSymmetricKey  String   // Group Symmetric Key encrypted with User's Public Key (Base64)
+  createdAt              DateTime @default(now())
 
   @@unique([eventId, userId])
 }
@@ -133,12 +139,13 @@ model LoanRequest {
 }
 
 model AssetWrappedKey {
-  id                     String @id @default(uuid())
+  id                     String   @id @default(uuid())
   assetId                String
-  asset                  Asset  @relation(fields: [assetId], references: [id])
+  asset                  Asset    @relation(fields: [assetId], references: [id])
   userId                 String
-  user                   User   @relation(fields: [userId], references: [id])
-  encryptedSymmetricKey  String // Group Symmetric Key encrypted with User's Public Key (Base64)
+  user                   User     @relation(fields: [userId], references: [id])
+  encryptedSymmetricKey  String   // Group Symmetric Key encrypted with User's Public Key (Base64)
+  createdAt              DateTime @default(now())
 
   @@unique([assetId, userId])
 }
@@ -166,4 +173,18 @@ model LedgerEntry {
   amount        Int           // Amount in cents pledged
   memo          String?       // Optional note from the contributor
   createdAt     DateTime      @default(now())
+}
+
+// --- Key Rotation ---
+
+// Signal record created when a group admin initiates a key rotation.
+// The requesting client uses it to fetch fresh member public keys and re-wrap
+// the group's AES-GCM symmetric key for all current members.
+model KeyRotationRequest {
+  id                String   @id @default(uuid())
+  groupId           String
+  group             Group    @relation(fields: [groupId], references: [id])
+  requestedByUserId String
+  requestedBy       User     @relation("KeyRotationRequests", fields: [requestedByUserId], references: [id])
+  createdAt         DateTime @default(now())
 }

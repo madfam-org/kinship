@@ -18,6 +18,7 @@ jest.mock('./prisma', () => {
     event: {
       create: jest.fn(),
       findMany: jest.fn(),
+      count:   jest.fn(),
     },
     asset: {
       create: jest.fn(),
@@ -26,9 +27,10 @@ jest.mock('./prisma', () => {
       update: jest.fn(),
     },
     loanRequest: {
-      create: jest.fn(),
+      create:   jest.fn(),
       findMany: jest.fn(),
-      update: jest.fn(),
+      count:    jest.fn(),
+      update:   jest.fn(),
     },
     treasuryPool: {
       create: jest.fn(),
@@ -38,8 +40,18 @@ jest.mock('./prisma', () => {
     },
     ledgerEntry: {
       create: jest.fn(),
+      count:  jest.fn(),
+      findMany: jest.fn(),
     },
-    $transaction: jest.fn(),
+    wrappedKey: {
+      upsert: jest.fn(),
+    },
+    keyRotationRequest: {
+      create: jest.fn(),
+    },
+    $transaction: jest.fn().mockImplementation(ops =>
+      Array.isArray(ops) ? Promise.all(ops) : ops
+    ),
   };
 });
 
