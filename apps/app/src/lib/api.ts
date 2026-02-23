@@ -18,8 +18,8 @@ export async function fetchAuthorizedEvents(userId: string): Promise<Event[]> {
   // Map Prisma Dates to JS Dates for the Event model
   return events.map((e: Record<string, unknown>) => ({
     ...e,
-    startTime: e.startTime ? new Date(e.startTime) : undefined,
-    endTime: e.endTime ? new Date(e.endTime) : undefined,
+    startTime: e.startTime ? new Date(e.startTime as string) : undefined,
+    endTime: e.endTime ? new Date(e.endTime as string) : undefined,
     minTrustLayerForDetails: e.minTrustLayer as TrustLayer
   }));
 }
@@ -51,5 +51,48 @@ export async function createAsset(payload: Record<string, unknown>): Promise<Ass
     body: JSON.stringify(payload)
   });
   if (!res.ok) throw new Error('Failed to create asset');
+  return res.json();
+}
+
+// Treasury
+export async function fetchTreasuryPools(groupId: string): Promise<Record<string, unknown>[]> {
+  const res = await fetch(`${API_BASE}/treasury/pools/${groupId}`);
+  if (!res.ok) throw new Error('Failed to fetch treasury pools');
+  return res.json();
+}
+
+export async function fetchPoolLedger(poolId: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/treasury/pools/${poolId}/ledger`);
+  if (!res.ok) throw new Error('Failed to fetch pool ledger');
+  return res.json();
+}
+
+export async function createTreasuryPool(payload: {
+  groupId: string;
+  title: string;
+  description?: string;
+  goalAmount: number;
+}): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/treasury/pools`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to create treasury pool');
+  return res.json();
+}
+
+export async function submitPledge(payload: {
+  poolId: string;
+  contributorId: string;
+  amount: number;
+  memo?: string;
+}): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/treasury/pledge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to submit pledge');
   return res.json();
 }

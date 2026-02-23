@@ -408,6 +408,96 @@ app.patch('/v1/loan-requests/:id', async (req, res) => {
   }
 });
 
+// --- Collective Treasury ---
+
+// Create a new Treasury Pool (crowdfunding campaign) for a Group
+app.post('/v1/treasury/pools', async (req, res) => {
+  const { groupId, title, description, goalAmount } = req.body;
+  if (!groupId || !title || !goalAmount) return res.status(400).send({ error: 'Missing required fields' });
+  try {
+    const pool = await prisma.treasuryPool.create({
+      data: { groupId, title, description, goalAmount }
+    });
+    res.send(pool);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Get all Treasury Pools for a Group
+app.get('/v1/treasury/pools/:groupId', async (req, res) => {
+  const { groupId } = req.params;
+  try {
+    const pools = await prisma.treasuryPool.findMany({
+      where: { groupId },
+      include: {
+        _count: { select: { ledgerEntries: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.send(pools);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Submit a pledge (LedgerEntry) — atomically updates pool balance
+app.post('/v1/treasury/pledge', async (req, res) => {
+  const { poolId, contributorId, amount, memo } = req.body;
+  if (!poolId || !contributorId || !amount || amount <= 0) {
+    return res.status(400).send({ error: 'Missing or invalid pledge fields' });
+  }
+  try {
+    const [ledgerEntry, updatedPool] = await prisma.$transaction([
+      prisma.ledgerEntry.create({
+        data: { poolId, contributorId, amount, memo }
+      }),
+      prisma.treasuryPool.update({
+        where: { id: poolId },
+        data: {
+          currentAmount: { increment: amount },
+          // Automatically mark as FUNDED when goal is reached
+          status: undefined // Handled via a secondary check below
+        }
+      })
+    ]);
+
+    // Check if goal is now met and set FUNDED status
+    if (updatedPool.currentAmount >= updatedPool.goalAmount && updatedPool.status === 'ACTIVE') {
+      await prisma.treasuryPool.update({
+        where: { id: poolId },
+        data: { status: 'FUNDED' }
+      });
+    }
+
+    res.send({ ledgerEntry, pool: updatedPool });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Get the transparent ledger for a specific Pool
+app.get('/v1/treasury/pools/:poolId/ledger', async (req, res) => {
+  const { poolId } = req.params;
+  try {
+    const pool = await prisma.treasuryPool.findUnique({
+      where: { id: poolId },
+      include: {
+        ledgerEntries: {
+          include: {
+            contributor: { select: { email: true } }
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+    if (!pool) return res.status(404).send({ error: 'Pool not found' });
+    res.send(pool);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
 if (require.main === module) {
   app.listen(port, () => {
     console.log(`Kinship API listening on port ${port}`);

@@ -29,7 +29,17 @@ jest.mock('./prisma', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
-    }
+    },
+    treasuryPool: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    ledgerEntry: {
+      create: jest.fn(),
+    },
+    $transaction: jest.fn(),
   };
 });
 

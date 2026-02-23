@@ -18,20 +18,22 @@ model User {
   batteryLastUpdate DateTime? @updatedAt
 
   // Relations
-  memberships GroupMembership[]
-  hostedEvents Event[] @relation("EventHost")
-  wrappedKeys   WrappedKey[]
+  memberships      GroupMembership[]
+  hostedEvents     Event[]          @relation("EventHost")
+  wrappedKeys      WrappedKey[]
   assetWrappedKeys AssetWrappedKey[]
-  assets        Asset[]  @relation("AssetOwner")
-  loanRequests  LoanRequest[] @relation("Borrower")
+  assets           Asset[]          @relation("AssetOwner")
+  loanRequests     LoanRequest[]    @relation("Borrower")
+  ledgerEntries    LedgerEntry[]
 }
 
 model Group {
-  id          String   @id @default(uuid())
-  name        String
-  memberships GroupMembership[]
-  events      Event[]
-  assets      Asset[]
+  id             String          @id @default(uuid())
+  name           String
+  memberships    GroupMembership[]
+  events         Event[]
+  assets         Asset[]
+  treasuryPools  TreasuryPool[]
 }
 
 model GroupMembership {
@@ -139,4 +141,29 @@ model AssetWrappedKey {
   encryptedSymmetricKey  String // Group Symmetric Key encrypted with User's Public Key (Base64)
 
   @@unique([assetId, userId])
+}
+
+model TreasuryPool {
+  id            String        @id @default(uuid())
+  groupId       String
+  group         Group         @relation(fields: [groupId], references: [id])
+  title         String
+  description   String?
+  goalAmount    Int           // Amount in cents (e.g. 5000 = $50.00)
+  currentAmount Int           @default(0)
+  status        String        @default("ACTIVE") // ACTIVE, FUNDED, CANCELLED
+  createdAt     DateTime      @default(now())
+
+  ledgerEntries LedgerEntry[]
+}
+
+model LedgerEntry {
+  id            String        @id @default(uuid())
+  poolId        String
+  pool          TreasuryPool  @relation(fields: [poolId], references: [id])
+  contributorId String
+  contributor   User          @relation(fields: [contributorId], references: [id])
+  amount        Int           // Amount in cents pledged
+  memo          String?       // Optional note from the contributor
+  createdAt     DateTime      @default(now())
 }
