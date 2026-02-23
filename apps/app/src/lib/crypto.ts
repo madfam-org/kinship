@@ -172,3 +172,46 @@ export async function initializeGroupKeyDemo(groupId: string, memberPublicKeys: 
     encryptedKeysByMember
   };
 }
+
+// --- Asset Metadata E2EE ---
+
+export interface AssetMetadata {
+  name: string;
+  description: string;
+  photoUrl?: string;
+}
+
+// Encrypt asset metadata for a specific trust group
+export async function encryptAssetMetadata(metadata: AssetMetadata, groupSymmetricKey: CryptoKey): Promise<string> {
+  const data = new TextEncoder().encode(JSON.stringify(metadata));
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  
+  const encryptedContent = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    groupSymmetricKey,
+    data
+  );
+
+  // Return IV + Ciphertext as a single Base64 string
+  const combined = new Uint8Array(iv.length + encryptedContent.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encryptedContent), iv.length);
+
+  return bufferToBase64(combined.buffer);
+}
+
+// Decrypt asset metadata using a group symmetric key
+export async function decryptAssetMetadata(encryptedBase64: string, groupSymmetricKey: CryptoKey): Promise<AssetMetadata> {
+  const combined = new Uint8Array(base64ToBuffer(encryptedBase64));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+
+  const decryptedContent = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    groupSymmetricKey,
+    ciphertext
+  );
+
+  return JSON.parse(new TextDecoder().decode(decryptedContent));
+}
+

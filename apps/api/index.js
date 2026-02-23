@@ -110,6 +110,92 @@ app.get('/v1/events/authorized/:userId', async (req, res) => {
   }
 });
 
+// --- Virtual Asset Inventory ---
+
+// Register a new Asset with Encrypted Metadata
+app.post('/v1/assets', async (req, res) => {
+  const { ownerId, groupId, encryptedMetadata, visibilityLayer, status } = req.body;
+  try {
+    const asset = await prisma.asset.create({
+      data: {
+        ownerId,
+        groupId,
+        encryptedMetadata,
+        visibilityLayer: visibilityLayer || 'INNER_CIRCLE',
+        status: status || 'AVAILABLE'
+      }
+    });
+    res.send(asset);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Fetch Asset Catalog for a User
+// returns assets owned by user or visible via trust layers
+app.get('/v1/assets/catalog/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    // In a real implementation, we'd filter by checking group intersections
+    // For the POC, we return all assets and assume frontend filters by layer/group
+    const assets = await prisma.asset.findMany({
+      include: {
+        owner: { select: { email: true } },
+        group: { select: { name: true } }
+      }
+    });
+    res.send(assets);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Submit a Loan Request
+app.post('/v1/loan-requests', async (req, res) => {
+  const { assetId, borrowerId, dueDate } = req.body;
+  try {
+    const loanRequest = await prisma.loanRequest.create({
+      data: {
+        assetId,
+        borrowerId,
+        dueDate: dueDate ? new Date(dueDate) : null
+      }
+    });
+    res.send(loanRequest);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Update Loan Request Status (Approve/Reject/Return)
+app.patch('/v1/loan-requests/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status, dueDate } = req.body;
+  try {
+    const loanRequest = await prisma.loanRequest.update({
+      where: { id },
+      data: { status, dueDate: dueDate ? new Date(dueDate) : undefined }
+    });
+    
+    // If approved, mark asset as LENT
+    if (status === 'APPROVED') {
+      await prisma.asset.update({
+        where: { id: loanRequest.assetId },
+        data: { status: 'LENT' }
+      });
+    } else if (status === 'RETURNED') {
+      await prisma.asset.update({
+        where: { id: loanRequest.assetId },
+        data: { status: 'AVAILABLE' }
+      });
+    }
+
+    res.send(loanRequest);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Kinship API listening on port ${port}`);
 });

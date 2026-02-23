@@ -8,6 +8,8 @@ import SocialBatteryDashboard from '@/components/SocialBatteryDashboard';
 import NetworkCapacityList from '@/components/NetworkCapacityList';
 import EventCreator from '@/components/EventCreator';
 import EventPollCard from '@/components/EventPollCard';
+import { AssetCatalog } from '@/components/AssetCatalog';
+import { AssetAddForm } from '@/components/AssetAddForm';
 import { generateUserKeyPair, initializeGroupKeyDemo, bufferToBase64 } from '@/lib/crypto';
 
 // Mock Users
@@ -70,8 +72,8 @@ export default function Home() {
   const [myBattery, setMyBattery] = useState(80);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
-  // Switch between Calendar and Planning modes
-  const [activeTab, setActiveTab] = useState<'calendar' | 'planning'>('calendar');
+  // Switch between Calendar, Planning, and Inventory modes
+  const [activeTab, setActiveTab] = useState<'calendar' | 'planning' | 'inventory'>('calendar');
 
   // State for the WebCrypto Demo
   const [demoLogs, setDemoLogs] = useState<string[]>([]);
@@ -181,12 +183,24 @@ export default function Home() {
             >
               📊 Async Planning ({pollingEvents.length})
             </button>
+            <button 
+              className={`btn ${activeTab === 'inventory' ? 'btn-primary' : 'btn-secondary'}`} 
+              onClick={() => setActiveTab('inventory')}
+              style={{ flex: 1 }}
+            >
+              📦 Inventory
+            </button>
           </div>
 
           <TrustRingSelector currentLayer={currentLayer} onChange={setCurrentLayer} />
           
           {activeTab === 'calendar' ? (
             <Calendar events={finalizedEvents} viewerLayer={currentLayer} />
+          ) : activeTab === 'inventory' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <AssetAddForm userId={mockUser1.id} />
+              <AssetCatalog userId={mockUser1.id} />
+            </div>
           ) : (
              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                <EventCreator currentUser={mockUser1} onEventCreated={handleEventCreated} />
