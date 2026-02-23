@@ -92,3 +92,17 @@ export interface GroupKey {
   // Map of userId -> the symmetricKey, encrypted by that specific user's public key
   encryptedKeysByMember: Record<string, string>;
 }
+
+/**
+ * Physical Asset representation
+ */
+export interface Asset {
+  id: string;
+  ownerId: string;
+  groupId?: string;
+  status: string;
+  visibilityLayer: string;
+  encryptedMetadata?: string;
+  owner?: { email: string };
+  group?: { name: string };
+}

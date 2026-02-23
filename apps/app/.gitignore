@@ -12,6 +12,12 @@
 
 # testing
 /coverage
+/.nyc_output
+/.jest
+/cypress/videos/
+/cypress/screenshots/
+/playwright-report/
+/test-results/
 
 # next.js
 /.next/

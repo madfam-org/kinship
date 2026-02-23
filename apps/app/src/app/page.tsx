@@ -10,66 +10,24 @@ import EventCreator from '@/components/EventCreator';
 import EventPollCard from '@/components/EventPollCard';
 import { AssetCatalog } from '@/components/AssetCatalog';
 import { AssetAddForm } from '@/components/AssetAddForm';
+import { LoanDashboard } from '@/components/LoanDashboard';
 import { generateUserKeyPair, initializeGroupKeyDemo, bufferToBase64 } from '@/lib/crypto';
+import { fetchAuthorizedEvents, fetchUserNetwork } from '@/lib/api';
 
-// Mock Users
-const mockUser1: User = { id: 'u1', name: 'Alice', avatarUrl: '', socialBattery: 80 };
-const mockUser2: User = { id: 'u2', name: 'Bob', avatarUrl: '', socialBattery: 65 };
-const mockUser3: User = { id: 'u3', name: 'Charlie', avatarUrl: '', socialBattery: 90 };
+// Temporary Mock Current User until Janua Auth parsing is fully mapped
+// We will assume Alice (u1) is the seeded current user.
+const currentUser = { id: 'u1', name: 'Alice', avatarUrl: '', socialBattery: 80 };
 
-const initialMockEvents: Event[] = [
-  {
-    id: 'e1',
-    hostId: 'u1',
-    title: 'Household Grocery Run',
-    description: 'Picking up supplies for the week at Trader Joe\'s.',
-    location: 'Trader Joe\'s',
-    startTime: new Date(new Date().setHours(10, 0, 0, 0)),
-    endTime: new Date(new Date().setHours(11, 30, 0, 0)),
-    attendees: [mockUser1, mockUser2],
-    isPolling: false,
-    minTrustLayerForDetails: TrustLayer.InnerCircle,
-    broadcastBusyState: true,
-    isSnowball: false
-  },
-  {
-    id: 'e2',
-    hostId: 'u1',
-    title: 'Polycule Board Game Night',
-    description: 'Playing Catan and checking in on logistics.',
-    location: 'Alice\'s Living Room',
-    startTime: new Date(new Date().setHours(19, 0, 0, 0)),
-    endTime: new Date(new Date().setHours(22, 0, 0, 0)),
-    attendees: [mockUser1, mockUser2, mockUser3],
-    isPolling: false,
-    minTrustLayerForDetails: TrustLayer.ExtendedPolycule,
-    broadcastBusyState: true,
-    isSnowball: false
-  },
-  {
-    id: 'e_poll_1',
-    hostId: 'u2',
-    title: 'Summer Lake Trip Planning (Snowball)',
-    description: 'Let\'s figure out which weekend works best for everyone to head to the lake!',
-    attendees: [mockUser1, mockUser2, mockUser3],
-    isPolling: true,
-    timePolls: [
-      { id: 'p1', label: 'June 12th - 14th', votes: ['u2'] },
-      { id: 'p2', label: 'June 19th - 21st', votes: ['u2', 'u3'] },
-      { id: 'p3', label: 'July 3rd - 5th', votes: [] },
-    ],
-    minTrustLayerForDetails: TrustLayer.FriendsOfFriends,
-    broadcastBusyState: false, // Polls don't block out time until finalized
-    isSnowball: true
-  }
-];
+// Removed initialMockEvents and mockUsers, we will fetch from Database.
 
 export default function Home() {
   const [currentLayer, setCurrentLayer] = useState<TrustLayer>(TrustLayer.InnerCircle);
-  const [events, setEvents] = useState<Event[]>(initialMockEvents);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [networkDirectory, setNetworkDirectory] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   // State for the Social Battery Demo
-  const [myBattery, setMyBattery] = useState(80);
+  const [myBattery, setMyBattery] = useState(currentUser.socialBattery || 80);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   // Switch between Calendar, Planning, and Inventory modes
@@ -79,11 +37,24 @@ export default function Home() {
   const [demoLogs, setDemoLogs] = useState<string[]>([]);
   const [isDemoRunning, setIsDemoRunning] = useState(false);
 
-  // Mock Inner Circle Data for the Network List
-  const mockInnerCircle: User[] = [
-    { ...mockUser2, socialBattery: 65 },
-    { ...mockUser3, socialBattery: 15 }
-  ];
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        const [netData, eventData] = await Promise.all([
+          fetchUserNetwork(currentUser.id),
+          fetchAuthorizedEvents(currentUser.id)
+        ]);
+        setNetworkDirectory(netData);
+        setEvents(eventData);
+      } catch (err) {
+        console.error("Failed to fetch initial state:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   const handleCriticalAlert = () => {
     setAlertMessage("Alert Sent: You have notified your Inner Circle that you are currently at low capacity.");
@@ -103,10 +74,10 @@ export default function Home() {
         if (poll.id !== pollId) return poll;
         
         // Toggle vote for currentUser (u1 / Alice)
-        const hasVoted = poll.votes.includes(mockUser1.id);
+        const hasVoted = poll.votes.includes(currentUser.id);
         const newVotes = hasVoted 
-          ? poll.votes.filter(id => id !== mockUser1.id)
-          : [...poll.votes, mockUser1.id];
+          ? poll.votes.filter(id => id !== currentUser.id)
+          : [...poll.votes, currentUser.id];
           
         return { ...poll, votes: newVotes };
       });
@@ -159,7 +130,7 @@ export default function Home() {
             onCapacityChange={setMyBattery} 
             onCriticalAlert={handleCriticalAlert}
           />
-          <NetworkCapacityList contacts={mockInnerCircle} />
+          <NetworkCapacityList contacts={networkDirectory} />
 
           {/* WebCrypto Demo Panel */}
           {/* ... (Omitted for brevity) ... */}
@@ -198,12 +169,14 @@ export default function Home() {
             <Calendar events={finalizedEvents} viewerLayer={currentLayer} />
           ) : activeTab === 'inventory' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <AssetAddForm userId={mockUser1.id} />
-              <AssetCatalog userId={mockUser1.id} />
+              <LoanDashboard userId={currentUser.id} />
+              <div style={{ borderTop: '2px dashed var(--border-color)', paddingTop: '1rem' }} />
+              <AssetAddForm userId={currentUser.id} />
+              <AssetCatalog userId={currentUser.id} />
             </div>
           ) : (
              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-               <EventCreator currentUser={mockUser1} onEventCreated={handleEventCreated} />
+               <EventCreator currentUser={currentUser} onEventCreated={handleEventCreated} />
                
                <div>
                  <h2 style={{ marginBottom: '1.5rem' }}>Active Polls</h2>
@@ -212,7 +185,7 @@ export default function Home() {
                      <EventPollCard 
                        key={evt.id} 
                        event={evt} 
-                       currentUser={mockUser1} 
+                       currentUser={currentUser} 
                        onVote={handleVote} 
                      />
                    ))}

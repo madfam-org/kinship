@@ -1,7 +1,6 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('./prisma');
 
-const prisma = new PrismaClient();
 const app = express();
 const port = process.env.PORT || 4000;
 
@@ -50,6 +49,68 @@ app.get('/v1/users/:email', async (req, res) => {
   }
 });
 
+// Get User Network (users they share a group with)
+app.get('/v1/users/:userId/network', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        id: { not: userId },
+        memberships: {
+          some: {
+            groupId: {
+              in: (await prisma.groupMembership.findMany({
+                where: { userId },
+                select: { groupId: true }
+              })).map(g => g.groupId)
+            }
+          }
+        }
+      },
+      select: { id: true, email: true, socialBattery: true, batteryLastUpdate: true }
+    });
+    res.send(users);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// --- Group Management ---
+
+app.post('/v1/groups', async (req, res) => {
+  const { name, ownerId } = req.body;
+  try {
+    const group = await prisma.group.create({
+      data: {
+        name,
+        memberships: {
+          create: [{ userId: ownerId, role: 'ADMIN' }]
+        }
+      }
+    });
+    res.send(group);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+app.post('/v1/groups/:id/members', async (req, res) => {
+  const { id } = req.params;
+  const { userId, role } = req.body;
+  try {
+    const membership = await prisma.groupMembership.create({
+      data: {
+        groupId: id,
+        userId,
+        role: role || 'MEMBER'
+      }
+    });
+    res.send(membership);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
 // --- Encrypted Event Envelopes ---
 
 // Submit a new Encrypted Event with Wrapped Keys
@@ -87,15 +148,32 @@ app.post('/v1/events', async (req, res) => {
 });
 
 // Get events for a user
-// returns any event where the user has a WrappedKey or is the host
+// Returns events where user is host, holds a WrappedKey, OR the event broadcasts "busy" and the host shares a group.
 app.get('/v1/events/authorized/:userId', async (req, res) => {
   const { userId } = req.params;
   try {
+    // 1. Get IDs of all groups the user is a member of
+    const userGroups = await prisma.groupMembership.findMany({
+      where: { userId },
+      select: { groupId: true }
+    });
+    const groupIds = userGroups.map(g => g.groupId);
+
     const authorizedEvents = await prisma.event.findMany({
       where: {
         OR: [
           { hostId: userId },
-          { wrappedKeys: { some: { userId } } }
+          { wrappedKeys: { some: { userId } } },
+          { 
+            broadcastBusy: true,
+            host: {
+              memberships: {
+                some: {
+                  groupId: { in: groupIds }
+                }
+              }
+            }
+          }
         ]
       },
       include: {
@@ -104,7 +182,26 @@ app.get('/v1/events/authorized/:userId', async (req, res) => {
         }
       }
     });
-    res.send(authorizedEvents);
+
+    // Strip encrypted payloads from events where the user is NOT the host and DOES NOT hold a wrapped key
+    // i.e., they are only seeing a "Busy Broadcast" from a network connection
+    const sanitizedEvents = authorizedEvents.map(event => {
+      const isHost = event.hostId === userId;
+      const hasWrappedKey = event.wrappedKeys && event.wrappedKeys.length > 0;
+      
+      if (!isHost && !hasWrappedKey) {
+         // It's a busy broadcast only. Strip sensitive payload entirely to enforce Zero Trust
+         return {
+           ...event,
+           encryptedPayload: null, 
+           // Technically we still need Title for the frontend Event model, but we set it blank here
+           // as a safety mechanism, even if encrypted Payload is null. Calendar.tsx handles "Busy".
+         };
+      }
+      return event;
+    });
+
+    res.send(sanitizedEvents);
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
@@ -132,13 +229,25 @@ app.post('/v1/assets', async (req, res) => {
 });
 
 // Fetch Asset Catalog for a User
-// returns assets owned by user or visible via trust layers
+// Returns assets owned by user or shared within a common group
 app.get('/v1/assets/catalog/:userId', async (req, res) => {
   const { userId } = req.params;
   try {
-    // In a real implementation, we'd filter by checking group intersections
-    // For the POC, we return all assets and assume frontend filters by layer/group
+    // 1. Find all groups this user belongs to
+    const userGroups = await prisma.groupMembership.findMany({
+       where: { userId },
+       select: { groupId: true }
+    });
+    const groupIds = userGroups.map(g => g.groupId);
+
+    // 2. Query assets owned by user OR assigned to a group the user is in
     const assets = await prisma.asset.findMany({
+      where: {
+        OR: [
+          { ownerId: userId },
+          { groupId: { in: groupIds } }
+        ]
+      },
       include: {
         owner: { select: { email: true } },
         group: { select: { name: true } }
@@ -162,6 +271,33 @@ app.post('/v1/loan-requests', async (req, res) => {
       }
     });
     res.send(loanRequest);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Get Loan Requests for a User (Borrowed by them OR Requested of their assets)
+app.get('/v1/loan-requests/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const loans = await prisma.loanRequest.findMany({
+      where: {
+        OR: [
+          { borrowerId: userId },
+          { asset: { ownerId: userId } }
+        ]
+      },
+      include: {
+        asset: {
+          select: { id: true, ownerId: true, encryptedMetadata: true, status: true }
+        },
+        borrower: {
+          select: { email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.send(loans);
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
@@ -196,7 +332,11 @@ app.patch('/v1/loan-requests/:id', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Kinship API listening on port ${port}`);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Kinship API listening on port ${port}`);
+  });
+}
+
+module.exports = app;
 

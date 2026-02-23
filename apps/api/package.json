@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "jest"
   },
   "keywords": [],
   "author": "",
@@ -14,6 +15,10 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
-    "prisma": "^6.19.2"
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "jest-mock-extended": "^4.0.0",
+    "prisma": "^6.19.2",
+    "supertest": "^7.2.2"
   }
 }

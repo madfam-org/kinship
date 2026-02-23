@@ -18,7 +18,7 @@ model User {
   batteryLastUpdate DateTime? @updatedAt
 
   // Relations
-  groups    Group[]  @relation("GroupMembers")
+  memberships GroupMembership[]
   hostedEvents Event[] @relation("EventHost")
   wrappedKeys   WrappedKey[]
   assets        Asset[]  @relation("AssetOwner")
@@ -28,9 +28,20 @@ model User {
 model Group {
   id          String   @id @default(uuid())
   name        String
-  members     User[]   @relation("GroupMembers")
+  memberships GroupMembership[]
   events      Event[]
   assets      Asset[]
+}
+
+model GroupMembership {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id])
+  role      String   @default("MEMBER") // MEMBER, ADMIN
+
+  @@unique([userId, groupId])
 }
 
 model Event {

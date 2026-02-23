@@ -1,32 +1,44 @@
 'use client';
 
 import React, { useState } from 'react';
+import { createAsset } from '../lib/api';
+import { encryptAssetMetadata, generateGroupSymmetricKey } from '../lib/crypto';
 
 export function AssetAddForm({ userId }: { userId: string }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
   const [layer, setLayer] = useState('INNER_CIRCLE');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // In production, we would call encryptAssetMetadata(metadata, groupKey) here
-    const mockEncryptedMetadata = btoa(JSON.stringify({ name, description }));
+    try {
+      // 1. Generate a mock group key for this demo (in production, we fetch the decrypted group key)
+      const mockGroupKey = await generateGroupSymmetricKey();
+      
+      // 2. Encrypt the sensitive metadata
+      const encryptedMetadata = await encryptAssetMetadata({
+        name,
+        description,
+        photoUrl
+      }, mockGroupKey);
 
-    const res = await fetch('/api/v1/assets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      // 3. Send securely to the API
+      await createAsset({
         ownerId: userId,
-        encryptedMetadata: mockEncryptedMetadata,
-        visibilityLayer: layer
-      })
-    });
+        encryptedMetadata,
+        visibilityLayer: layer,
+        status: 'AVAILABLE'
+      });
 
-    if (res.ok) {
-      alert('Asset cataloged securely!');
+      alert('Asset securely encrypted and cataloged!');
       setName('');
       setDescription('');
+      setPhotoUrl('');
+    } catch (error) {
+      console.error("Failed to save asset:", error);
+      alert('Error saving asset.');
     }
   };
 
@@ -45,6 +57,12 @@ export function AssetAddForm({ userId }: { userId: string }) {
           placeholder="Description (Private to your Trust Shell)" 
           value={description} 
           onChange={e => setDescription(e.target.value)} 
+          style={{ width: '100%', padding: '8px', marginBottom: '8px' }}
+        />
+        <input 
+          placeholder="Photo URL (Optional)" 
+          value={photoUrl} 
+          onChange={e => setPhotoUrl(e.target.value)} 
           style={{ width: '100%', padding: '8px' }}
         />
       </div>
