@@ -1,0 +1,21 @@
+echo "[Husky] Staged commit detected. Engaging pre-flight pipeline..."
+
+# 1. Run Tests Across Monorepo
+echo "[Step 1] Running standard API tests..."
+npm test --workspaces --if-present
+
+if [ $? -ne 0 ]; then
+  echo "❌ ENFORCEMENT FAILED: One or more tests did not pass. Commit blocked."
+  exit 1
+fi
+
+# 2. Execute File Size Guardrails
+echo "[Step 2] Measuring file length boundaries..."
+./.husky/check-size.sh
+
+if [ $? -ne 0 ]; then
+  # check-size.sh outputs its own strict reasoning
+  exit 1
+fi
+
+echo "[Husky] All pipeline requirements successfully met! Proceeding... ✓"

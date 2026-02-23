@@ -2,8 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { fetchAssetCatalog } from '../lib/api';
-import { decryptAssetMetadata, generateGroupSymmetricKey, AssetMetadata } from '../lib/crypto';
+import { decryptAssetMetadata, AssetMetadata, getStoredKeyPair, decryptKeyForUser } from '../lib/crypto';
 import { Asset } from '../models/types';
+import { Card, CardContent, CardFooter, CardHeader } from './ui/card';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 
 interface DecryptedAsset extends Asset {
   decryptedData?: AssetMetadata;
@@ -18,20 +21,31 @@ export function AssetCatalog({ userId }: { userId: string }) {
       try {
         const data = await fetchAssetCatalog(userId);
         
-        // Mock group key for decryption demo
-        const mockGroupKey = await generateGroupSymmetricKey();
+        // 0. Load the local identity private key
+        const keyPair = await getStoredKeyPair();
+        if (!keyPair) {
+          console.warn("No local identity keypair found. Cannot decrypt catalog.");
+          setAssets(data.map((a: any) => ({...a, decryptedData: { name: 'Encrypted Item', description: 'No local keypair' }})));
+          setLoading(false);
+          return;
+        }
         
-        const decryptedAssets = await Promise.all(data.map(async (asset) => {
+        const decryptedAssets = await Promise.all(data.map(async (asset: any) => {
           if (!asset.encryptedMetadata) return asset;
           
           try {
-            // Note: In reality this would use the specific group key tied to the asset's groupId
-            // but for the demo we assume it decrypts successfully. Since the mock keys rotate 
-            // on refresh, we wrap this in a try/catch and fallback gracefully.
-            const decrypted = await decryptAssetMetadata(asset.encryptedMetadata, mockGroupKey);
+            // Find the wrapped symmetric key for this specific user
+            const wrappedKeyData = asset.wrappedKeys?.find((k: any) => k.userId === userId);
+            if (!wrappedKeyData) throw new Error("No wrapped key found");
+
+            // Unwrap the AES symmetric key using user's Private RSA Key
+            const symmetricKey = await decryptKeyForUser(wrappedKeyData.encryptedSymmetricKey, keyPair.privateKey);
+
+            // Decrypt the actual metadata payload
+            const decrypted = await decryptAssetMetadata(asset.encryptedMetadata, symmetricKey);
             return { ...asset, decryptedData: decrypted };
           } catch (e) {
-            return { ...asset, decryptedData: { name: 'Encrypted Item', description: 'Requires Key' } };
+            return { ...asset, decryptedData: { name: 'Encrypted Item', description: 'Private' } };
           }
         }));
 
@@ -62,44 +76,83 @@ export function AssetCatalog({ userId }: { userId: string }) {
     alert('Loan request sent!');
   };
 
-  if (loading) return <div>Loading Catalog...</div>;
+  if (loading) return <div className="p-8 text-center text-muted-foreground animate-pulse">Decrypting Community Ledger...</div>;
+
+  // Helper function to map database strings to Shadcn Variant types
+  const getTrustVariant = (layer: string) => {
+    switch(layer) {
+      case 'INNER_CIRCLE': return 'inner';
+      case 'EXTENDED_POLYCULE': return 'polycule';
+      case 'OUTER_RING': return 'outer';
+      case 'FRIENDS_OF_FRIENDS': return 'fof';
+      default: return 'outline';
+    }
+  };
 
   return (
-    <div style={{ padding: '20px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
-      <h3>Community Asset Inventory</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
+    <div className="p-6">
+      <h3 className="text-2xl font-semibold mb-6 text-primary tracking-tight">Community Asset Inventory</h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {assets.map(asset => (
-          <div key={asset.id} style={{ border: '1px solid #e5e7eb', padding: '16px', borderRadius: '8px', background: 'white', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ fontSize: '12px', color: '#6b7280' }}>
-              Owner: {asset.owner?.email} | Layer: {asset.visibilityLayer}
-            </div>
-            
-            {asset.decryptedData ? (
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                {asset.decryptedData.photoUrl && (
-                  <img src={asset.decryptedData.photoUrl} alt="Asset" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px' }} />
-                )}
-                <div>
-                  <strong style={{ display: 'block', fontSize: '1.1rem' }}>{asset.decryptedData.name}</strong>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.9rem', color: '#4b5563' }}>{asset.decryptedData.description}</p>
-                </div>
+          <Card key={asset.id} className="flex flex-col h-full bg-card/40 backdrop-blur-md border border-white/5 hover:border-white/20 transition-all duration-300">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-xs text-muted-foreground truncate max-w-[150px]">{asset.owner?.email}</span>
+                <Badge variant={getTrustVariant(asset.visibilityLayer) as "default" | "secondary" | "destructive" | "outline" | "inner" | "polycule" | "outer" | "fof"} className="text-[10px] px-2 py-0 h-5">
+                  {asset.visibilityLayer.replace(/_/g, ' ')}
+                </Badge>
               </div>
-            ) : (
-              <strong>[Encrypted Item - Missing Key]</strong>
-            )}
+            </CardHeader>
+            
+            <CardContent className="flex-grow">
+              {asset.decryptedData ? (
+                <div className="flex flex-col gap-3">
+                  {asset.decryptedData.photoUrl && (
+                    <div className="w-full h-32 rounded-md overflow-hidden bg-background/50 border border-white/10">
+                      <img src={asset.decryptedData.photoUrl} alt="Asset" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="font-semibold text-lg leading-tight text-foreground">{asset.decryptedData.name}</h4>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{asset.decryptedData.description}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-24 bg-background/50 rounded-md border border-dashed border-white/20">
+                  <span className="text-sm text-muted-foreground font-mono">[Encrypted Data]</span>
+                </div>
+              )}
+            </CardContent>
 
-            <p style={{ fontSize: '14px', color: '#374151', margin: 0, marginTop: '8px' }}>
-              Status: <span style={{ color: asset.status === 'AVAILABLE' ? 'green' : 'orange', fontWeight: 'bold' }}>{asset.status}</span>
-            </p>
-            {asset.status === 'AVAILABLE' && asset.ownerId !== userId && (
-              <button 
-                onClick={() => handleRequestLoan(asset.id)}
-                style={{ width: '100%', padding: '8px', backgroundColor: '#4f46e5', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-              >
-                Request Item
-              </button>
-            )}
-          </div>
+            <CardFooter className="flex flex-col gap-3 pt-4 border-t border-white/5">
+              <div className="flex justify-between items-center w-full">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${asset.status === 'AVAILABLE' ? 'bg-success-color animate-pulse' : 'bg-warning-color'}`} />
+                  <span className="text-xs font-semibold text-muted-foreground">{asset.status}</span>
+                </div>
+                {asset.autoApproveLayer && (
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    Auto: <Badge variant={getTrustVariant(asset.autoApproveLayer) as "default" | "secondary" | "destructive" | "outline" | "inner" | "polycule" | "outer" | "fof"} className="h-4 px-1 text-[9px] opacity-70">{asset.autoApproveLayer.split('_')[0]}</Badge>
+                  </span>
+                )}
+              </div>
+              
+              {asset.status === 'AVAILABLE' && asset.ownerId !== userId ? (
+                <Button 
+                  onClick={() => handleRequestLoan(asset.id)}
+                  className="w-full bg-primary/20 hover:bg-primary/40 text-primary border border-primary/30 mt-2"
+                  variant="outline"
+                >
+                  Request Item
+                </Button>
+              ) : (
+                <Button disabled variant="secondary" className="w-full mt-2 opacity-50 bg-background/50">
+                  {asset.ownerId === userId ? "Your Item" : "Checked Out"}
+                </Button>
+              )}
+            </CardFooter>
+          </Card>
         ))}
       </div>
     </div>

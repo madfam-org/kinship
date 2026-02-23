@@ -34,6 +34,6 @@ This document maps the trajectory of the Kinship platform from foundational proo
 -   [ ] **Sweat Equity Tracking:** A "Slicing Pie" dynamic equity model to fairly quantify and review non-monetary operations in community projects.
 
 ### Strategic Market Vectors (Derived from Benchmark)
--   [ ] **Inter-Module Automation:** Tying the "Social Battery" directly to cooperative features (e.g. automatically blocking heavy task assignments when capacity is critically low).
--   [ ] **Trust-Layered Economy:** Establishing dynamic, zero-trust rules for the asset inventory (e.g. lending conditions or visibility strictly based on your cryptographic "Shell of Trust").
+-   [x] **Inter-Module Automation:** Tying the "Social Battery" directly to cooperative features (e.g. automatically blocking heavy task assignments when capacity is critically low).
+-   [x] **Trust-Layered Economy:** Establishing dynamic, zero-trust rules for the asset inventory (e.g. lending conditions or visibility strictly based on your cryptographic "Shell of Trust").
 -   [ ] **Pod Federation:** Enabling independent Kinship cooperative deployments to federate, scaling the asset and gig economy across networks without centralizing data.

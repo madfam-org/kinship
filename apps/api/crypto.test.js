@@ -45,17 +45,57 @@ async function decryptAssetMetadata(encryptedBase64, groupSymmetricKey) {
   return JSON.parse(new TextDecoder().decode(decryptedContent));
 }
 
+// Re-creating the RSA-OAEP asymmetric key exchange logic
+async function encryptKeyForUser(symmetricKey, userPublicKey) {
+  const rawSymmetricKey = await webcrypto.subtle.exportKey("raw", symmetricKey);
+  const encryptedBuffer = await webcrypto.subtle.encrypt(
+    { name: "RSA-OAEP" },
+    userPublicKey,
+    rawSymmetricKey
+  );
+  return bufferToBase64(encryptedBuffer);
+}
+
+async function decryptKeyForUser(encryptedBase64Key, userPrivateKey) {
+  const encryptedBuffer = base64ToBuffer(encryptedBase64Key);
+  const rawSymmetricKey = await webcrypto.subtle.decrypt(
+    { name: "RSA-OAEP" },
+    userPrivateKey,
+    encryptedBuffer
+  );
+  return await webcrypto.subtle.importKey(
+    "raw",
+    rawSymmetricKey,
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"]
+  );
+}
+
 // --- Test Suite ---
 
 describe('WebCrypto Frontend Logic Validation', () => {
 
   let groupSymmetricKey;
+  let userKeyPair;
 
   beforeAll(async () => {
     // Generate the mock "Group Key" exactly as the browser would
     groupSymmetricKey = await webcrypto.subtle.generateKey(
       { name: "AES-GCM", length: 256 },
       true, 
+      ["encrypt", "decrypt"]
+    );
+
+    // Generate the simulated "User Keys" for asymmetric envelopes
+    userKeyPair = await webcrypto.subtle.generateKey(
+      {
+        name: "RSA-OAEP",
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: "SHA-256",
+      },
+      true,
       ["encrypt", "decrypt"]
     );
   });
@@ -109,6 +149,30 @@ describe('WebCrypto Frontend Logic Validation', () => {
     
     const resultStr = new TextDecoder().decode(resultBuf);
     expect(resultStr).toEqual(str);
+  });
+
+  it('asymmetrically wraps and unwraps symmetric keys (RSA-OAEP AssetWrappedKey)', async () => {
+    // 1. Wrap the symmetric key
+    const wrappedKeyBase64 = await encryptKeyForUser(groupSymmetricKey, userKeyPair.publicKey);
+    
+    // Validate the envelope blob
+    expect(wrappedKeyBase64).toBeDefined();
+    expect(typeof wrappedKeyBase64).toBe('string');
+    expect(wrappedKeyBase64.length).toBeGreaterThan(100);
+
+    // 2. Unwrap the key using the simulated private key
+    const unwrappedKey = await decryptKeyForUser(wrappedKeyBase64, userKeyPair.privateKey);
+    
+    // Cross-validate the cryptographic objects
+    expect(unwrappedKey.algorithm.name).toBe("AES-GCM");
+
+    // 3. Guarantee that the freshly unwrapped key functions identically 
+    // to the original source key against actual asset data.
+    const originalMetadata = { name: 'Hammer' };
+    const encryptedBase64 = await encryptAssetMetadata(originalMetadata, unwrappedKey);
+    const decryptedData = await decryptAssetMetadata(encryptedBase64, groupSymmetricKey);
+    
+    expect(decryptedData).toEqual(originalMetadata);
   });
 
 });

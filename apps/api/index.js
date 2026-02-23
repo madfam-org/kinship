@@ -226,7 +226,7 @@ app.get('/v1/events/authorized/:userId', async (req, res) => {
 
 // Register a new Asset with Encrypted Metadata
 app.post('/v1/assets', async (req, res) => {
-  const { ownerId, groupId, encryptedMetadata, visibilityLayer, autoApproveLayer, status, requiresHighCapacity } = req.body;
+  const { ownerId, groupId, encryptedMetadata, visibilityLayer, autoApproveLayer, status, requiresHighCapacity, wrappedKeys } = req.body;
   try {
     const asset = await prisma.asset.create({
       data: {
@@ -236,7 +236,10 @@ app.post('/v1/assets', async (req, res) => {
         visibilityLayer: visibilityLayer || 'INNER_CIRCLE',
         autoApproveLayer: autoApproveLayer || 'INNER_CIRCLE',
         status: status || 'AVAILABLE',
-        requiresHighCapacity: requiresHighCapacity || false
+        requiresHighCapacity: requiresHighCapacity || false,
+        wrappedKeys: {
+          create: wrappedKeys || []
+        }
       }
     });
     res.send(asset);
@@ -267,7 +270,10 @@ app.get('/v1/assets/catalog/:userId', async (req, res) => {
       },
       include: {
         owner: { select: { email: true, socialBattery: true } },
-        group: { select: { name: true } }
+        group: { select: { name: true } },
+        wrappedKeys: {
+          where: { userId }
+        }
       }
     });
 
@@ -359,7 +365,7 @@ app.get('/v1/loan-requests/:userId', async (req, res) => {
 // Update Loan Request Status (Approve/Reject/Return)
 app.patch('/v1/loan-requests/:id', async (req, res) => {
   const { id } = req.params;
-  const { status, dueDate } = req.body;
+  const { status, dueDate, wrappedKey } = req.body;
   try {
     const loanRequest = await prisma.loanRequest.update({
       where: { id },
@@ -372,6 +378,23 @@ app.patch('/v1/loan-requests/:id', async (req, res) => {
         where: { id: loanRequest.assetId },
         data: { status: 'LENT' }
       });
+      
+      if (wrappedKey) {
+        await prisma.assetWrappedKey.upsert({
+          where: {
+            assetId_userId: {
+              assetId: loanRequest.assetId,
+              userId: loanRequest.borrowerId
+            }
+          },
+          update: { encryptedSymmetricKey: wrappedKey },
+          create: {
+            assetId: loanRequest.assetId,
+            userId: loanRequest.borrowerId,
+            encryptedSymmetricKey: wrappedKey
+          }
+        });
+      }
     } else if (status === 'RETURNED') {
       await prisma.asset.update({
         where: { id: loanRequest.assetId },

@@ -94,7 +94,7 @@ export function LoanDashboard({ userId }: { userId: string }) {
 
         {/* My Outbound Requests */}
         <div>
-          <h4>Borrowing (Other's Items)</h4>
+          <h4>Borrowing (Other&apos;s Items)</h4>
           {myRequests.length === 0 && <p style={{ color: '#6b7280' }}>No active requests.</p>}
           {myRequests.map(loan => (
             <div key={loan.id} style={{ border: '1px solid #e5e7eb', padding: '12px', borderRadius: '8px', background: 'white', marginBottom: '8px' }}>

@@ -16,7 +16,7 @@ export async function fetchAuthorizedEvents(userId: string): Promise<Event[]> {
   const events = await res.json();
   
   // Map Prisma Dates to JS Dates for the Event model
-  return events.map((e: any) => ({
+  return events.map((e: Record<string, unknown>) => ({
     ...e,
     startTime: e.startTime ? new Date(e.startTime) : undefined,
     endTime: e.endTime ? new Date(e.endTime) : undefined,
@@ -24,7 +24,7 @@ export async function fetchAuthorizedEvents(userId: string): Promise<Event[]> {
   }));
 }
 
-export async function createEvent(payload: any): Promise<Event> {
+export async function createEvent(payload: Record<string, unknown>): Promise<Event> {
   const res = await fetch(`${API_BASE}/events`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -44,7 +44,7 @@ export async function fetchAssetCatalog(userId: string): Promise<Asset[]> {
   return res.json();
 }
 
-export async function createAsset(payload: any): Promise<Asset> {
+export async function createAsset(payload: Record<string, unknown>): Promise<Asset> {
   const res = await fetch(`${API_BASE}/assets`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

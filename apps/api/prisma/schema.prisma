@@ -21,6 +21,7 @@ model User {
   memberships GroupMembership[]
   hostedEvents Event[] @relation("EventHost")
   wrappedKeys   WrappedKey[]
+  assetWrappedKeys AssetWrappedKey[]
   assets        Asset[]  @relation("AssetOwner")
   loanRequests  LoanRequest[] @relation("Borrower")
 }
@@ -114,6 +115,7 @@ model Asset {
   requiresHighCapacity Boolean @default(false)
 
   loanRequests     LoanRequest[]
+  wrappedKeys      AssetWrappedKey[]
 }
 
 model LoanRequest {
@@ -126,4 +128,15 @@ model LoanRequest {
   status     String   @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED
   dueDate    DateTime?
   createdAt  DateTime @default(now())
+}
+
+model AssetWrappedKey {
+  id                     String @id @default(uuid())
+  assetId                String
+  asset                  Asset  @relation(fields: [assetId], references: [id])
+  userId                 String
+  user                   User   @relation(fields: [userId], references: [id])
+  encryptedSymmetricKey  String // Group Symmetric Key encrypted with User's Public Key (Base64)
+
+  @@unique([assetId, userId])
 }

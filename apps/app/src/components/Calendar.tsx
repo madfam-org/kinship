@@ -53,7 +53,7 @@ export default function Calendar({ events, viewerLayer }: Props) {
       </h2>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {processedEvents.map((event: any) => (
+        {processedEvents.map((event: Record<string, unknown> & { id: string, isAuthorized: boolean, displayTitle: string, startTime: string, endTime: string, location?: string, description?: string, attendees: unknown[], minTrustLayerForDetails: string }) => (
            <div 
              key={event.id}
              style={{
@@ -83,7 +83,7 @@ export default function Calendar({ events, viewerLayer }: Props) {
                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                    <span>👥 Attendees: </span>
                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                     {event.attendees.map((attendee: any) => (
+                     {event.attendees.map((attendee: unknown) => (
                        <span key={attendee.id} className="badge badge-success">{attendee.name}</span>
                      ))}
                    </div>
