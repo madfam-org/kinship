@@ -2,6 +2,18 @@
 
 This document synthesizes findings from platforms operating in adjacent problem spaces—social scheduling, capacity tracking, asset pooling, and cooperative management—to identify gaps and define Kinship's unique market positioning.
 
+## Feature Comparison Chart
+
+| Feature | Kinship | Google Calendar | Howbout | Peerby / Fat Llama | Open Collective / Loomio | Signal / Wire |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **"Shells of Trust" Tiers** | ✅ | ❌ | ⚠️ (Basic Groups) | ❌ | ❌ | ❌ |
+| **P2P Social/Event Sync** | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Social Battery / Capacity** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Virtual Asset Lending** | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **Cooperative Voting/Equity** | 📍 (Roadmap) | ❌ | ❌ | ❌ | ✅ | ❌ |
+| **Automated "Burnout" Protection** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Native End-to-End Encryption** | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+
 ## 1. Social Scheduling & Tiered Calendars
 
 **Competitors:** Howbout, TimeTree, PlanPop, OurCal, Google Calendar.
