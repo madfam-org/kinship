@@ -6,6 +6,16 @@ const port = process.env.PORT || 4000;
 
 app.use(express.json());
 
+// CORS — allow the Next.js dev server / Enclii ingress to reach the API
+app.use((req, res, next) => {
+  const allowed = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
+  res.setHeader('Access-Control-Allow-Origin', allowed);
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // Healthcheck endpoint for Enclii probes
 app.get('/', (req, res) => {
   res.send({ status: 'healthy', service: 'kinship-api' });
@@ -496,6 +506,24 @@ app.get('/v1/treasury/pools/:poolId/ledger', async (req, res) => {
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
+});
+
+// --- Global Error Handling ---
+
+// 404 catch-all: structured JSON for unknown routes
+app.use((req, res) => {
+  res.status(404).send({ error: `Route not found: ${req.method} ${req.path}` });
+});
+
+// Global error handler middleware (4 args required by Express)
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('[Kinship API] Unhandled error:', err);
+  const status = err.status || err.statusCode || 500;
+  const message = process.env.NODE_ENV === 'production'
+    ? 'An internal server error occurred'
+    : err.message;
+  res.status(status).send({ error: message });
 });
 
 if (require.main === module) {

@@ -8,8 +8,10 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { useToast } from './ui/toast';
 
 export function AssetAddForm({ userId }: { userId: string }) {
+  const { toast } = useToast();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
@@ -52,13 +54,13 @@ export function AssetAddForm({ userId }: { userId: string }) {
         wrappedKeys: [{ userId: userId, encryptedSymmetricKey: wrappedKey }]
       });
 
-      alert('Asset securely encrypted and cataloged!');
+      toast('Asset securely encrypted and cataloged!', 'success');
       setName('');
       setDescription('');
       setPhotoUrl('');
     } catch (error) {
       console.error("Failed to save asset:", error);
-      alert('Error saving asset.');
+      toast('Failed to encrypt and save your asset. Please try again.', 'error');
     }
   };
 

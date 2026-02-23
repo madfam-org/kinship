@@ -11,8 +11,11 @@ import EventPollCard from '@/components/EventPollCard';
 import { AssetCatalog } from '@/components/AssetCatalog';
 import { AssetAddForm } from '@/components/AssetAddForm';
 import { LoanDashboard } from '@/components/LoanDashboard';
+import { TreasuryDashboard } from '@/components/TreasuryDashboard';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { generateUserKeyPair, initializeGroupKeyDemo, bufferToBase64 } from '@/lib/crypto';
 import { fetchAuthorizedEvents, fetchUserNetwork } from '@/lib/api';
+import { useToast } from '@/components/ui/toast';
 
 // Temporary Mock Current User until Janua Auth parsing is fully mapped
 // We will assume Alice (u1) is the seeded current user.
@@ -21,6 +24,7 @@ const currentUser = { id: 'u1', name: 'Alice', avatarUrl: '', socialBattery: 80 
 // Removed initialMockEvents and mockUsers, we will fetch from Database.
 
 export default function Home() {
+  const { toast } = useToast();
   const [currentLayer, setCurrentLayer] = useState<TrustLayer>(TrustLayer.InnerCircle);
   const [events, setEvents] = useState<Event[]>([]);
   const [networkDirectory, setNetworkDirectory] = useState<User[]>([]);
@@ -49,6 +53,7 @@ export default function Home() {
         setEvents(eventData);
       } catch (err) {
         console.error("Failed to fetch initial state:", err);
+        toast('Could not load your schedule and network. Is the API running?', 'error');
       } finally {
         setIsLoading(false);
       }
@@ -166,28 +171,39 @@ export default function Home() {
           <TrustRingSelector currentLayer={currentLayer} onChange={setCurrentLayer} />
           
           {activeTab === 'calendar' ? (
-            <Calendar events={finalizedEvents} viewerLayer={currentLayer} />
+            <ErrorBoundary section="Calendar">
+              <Calendar events={finalizedEvents} viewerLayer={currentLayer} />
+            </ErrorBoundary>
           ) : activeTab === 'inventory' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <LoanDashboard userId={currentUser.id} />
+              <ErrorBoundary section="Loan Dashboard">
+                <LoanDashboard userId={currentUser.id} />
+              </ErrorBoundary>
               <div style={{ borderTop: '2px dashed var(--border-color)', paddingTop: '1rem' }} />
-              <AssetAddForm userId={currentUser.id} />
-              <AssetCatalog userId={currentUser.id} />
+              <ErrorBoundary section="Asset Registry">
+                <AssetAddForm userId={currentUser.id} />
+                <AssetCatalog userId={currentUser.id} />
+              </ErrorBoundary>
+              <ErrorBoundary section="Collective Treasury">
+                <TreasuryDashboard userId={currentUser.id} groupId="g1" />
+              </ErrorBoundary>
             </div>
           ) : (
              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-               <EventCreator currentUser={currentUser} onEventCreated={handleEventCreated} />
-               
+               <ErrorBoundary section="Event Creator">
+                 <EventCreator currentUser={currentUser} onEventCreated={handleEventCreated} />
+               </ErrorBoundary>
                <div>
                  <h2 style={{ marginBottom: '1.5rem' }}>Active Polls</h2>
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                    {pollingEvents.map(evt => (
-                     <EventPollCard 
-                       key={evt.id} 
-                       event={evt} 
-                       currentUser={currentUser} 
-                       onVote={handleVote} 
-                     />
+                     <ErrorBoundary key={evt.id} section={`Poll ${evt.id}`}>
+                       <EventPollCard 
+                         event={evt} 
+                         currentUser={currentUser} 
+                         onVote={handleVote} 
+                       />
+                     </ErrorBoundary>
                    ))}
                    {pollingEvents.length === 0 && (
                      <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem' }}>No active polls.</p>

@@ -7,14 +7,17 @@ import { Asset } from '../models/types';
 import { Card, CardContent, CardFooter, CardHeader } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { useToast } from './ui/toast';
 
 interface DecryptedAsset extends Asset {
   decryptedData?: AssetMetadata;
 }
 
 export function AssetCatalog({ userId }: { userId: string }) {
+  const { toast } = useToast();
   const [assets, setAssets] = useState<DecryptedAsset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadAssets() {
@@ -52,6 +55,7 @@ export function AssetCatalog({ userId }: { userId: string }) {
         setAssets(decryptedAssets);
       } catch (err) {
         console.error("Failed to load catalog", err);
+        setLoadError('Failed to load asset catalog. Please check your connection.');
       } finally {
         setLoading(false);
       }
@@ -73,10 +77,16 @@ export function AssetCatalog({ userId }: { userId: string }) {
         dueDate: dueDate.toISOString()
       })
     });
-    alert('Loan request sent!');
+    toast('Loan request sent! The owner will be notified.', 'success');
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground animate-pulse">Decrypting Community Ledger...</div>;
+  if (loadError) return (
+    <div className="p-6 text-center">
+      <p className="text-destructive text-sm">{loadError}</p>
+      <button onClick={() => { setLoadError(null); setLoading(true); }} className="mt-3 text-xs text-primary underline">Retry</button>
+    </div>
+  );
 
   // Helper function to map database strings to Shadcn Variant types
   const getTrustVariant = (layer: string) => {
