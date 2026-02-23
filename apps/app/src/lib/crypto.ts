@@ -1,5 +1,9 @@
 import { GroupKey } from '../models/types';
 
+const DB_NAME = 'kinship-vault';
+const STORE_NAME = 'identity-keys';
+const API_BASE = '/api-proxy'; // In a real app this would be configured via env or proxy
+
 /**
  * WEBCRYPTO E2EE UTILITIES
  * Production-ready End-to-End Encryption logic using the native browser WebCrypto API.
@@ -26,10 +30,72 @@ export async function generateUserKeyPair(): Promise<CryptoKeyPair> {
       publicExponent: new Uint8Array([1, 0, 1]),
       hash: "SHA-256",
     },
-    true, // In production, PrivateKeys should be false (non-extractable) if possible, but kept true here for local storage mocking
+    true, // extractable so we can store it in DB
     ["encrypt", "decrypt"]
   ) : {} as CryptoKeyPair;
 }
+
+// PERSISTENCE: IndexedDB Storage for identity keys
+async function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(STORE_NAME);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function saveKeyPair(keyPair: CryptoKeyPair): Promise<void> {
+  const db = await openDB();
+  const tx = db.transaction(STORE_NAME, 'readwrite');
+  tx.objectStore(STORE_NAME).put(keyPair, 'current-identity');
+  return new Promise((resolve) => {
+    tx.oncomplete = () => resolve();
+  });
+}
+
+export async function getStoredKeyPair(): Promise<CryptoKeyPair | null> {
+  const db = await openDB();
+  const tx = db.transaction(STORE_NAME, 'readonly');
+  const request = tx.objectStore(STORE_NAME).get('current-identity');
+  return new Promise((resolve) => {
+    request.onsuccess = () => resolve(request.result || null);
+  });
+}
+
+// API SYNC: Register Public Key with Kinship API
+export async function syncUserPublicKey(januaId: string, email: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  let keyPair = await getStoredKeyPair();
+  
+  if (!keyPair) {
+    console.log('[E2EE] No identity found. Generating new RSA KeyPair...');
+    keyPair = await generateUserKeyPair();
+    await saveKeyPair(keyPair);
+  }
+
+  // Export public key to SPKI format (Standard for public key transit)
+  const spkiBuffer = await window.crypto.subtle.exportKey('spki', keyPair.publicKey);
+  const publicKeyBase64 = bufferToBase64(spkiBuffer);
+
+  // Sync with API
+  try {
+    const response = await fetch('/api/v1/users', { // Note: Assume /api is proxied to the api service
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ januaId, email, publicKey: publicKeyBase64 })
+    });
+    
+    if (!response.ok) throw new Error('Failed to sync public key');
+    console.log('[E2EE] Public key synced successfully.');
+  } catch (error) {
+    console.error('[E2EE] Sync Error:', error);
+  }
+}
+
 
 // Helper to convert an ArrayBuffer to a Base64 string for storage/transmission
 export function bufferToBase64(buffer: ArrayBuffer): string {
