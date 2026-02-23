@@ -110,6 +110,7 @@ model Asset {
 
   status           String    @default("AVAILABLE") // AVAILABLE, LENT, MAINTENANCE
   visibilityLayer  String    // INNER_CIRCLE, OUTER_RING, etc.
+  autoApproveLayer String    @default("INNER_CIRCLE") // Determines auto-approval threshold
   requiresHighCapacity Boolean @default(false)
 
   loanRequests     LoanRequest[]
@@ -121,6 +122,7 @@ model LoanRequest {
   asset      Asset    @relation(fields: [assetId], references: [id])
   borrowerId String
   borrower   User     @relation("Borrower", fields: [borrowerId], references: [id])
+  trustDistance String @default("OUTER_RING") // Captured trust layer at time of request
   status     String   @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED
   dueDate    DateTime?
   createdAt  DateTime @default(now())

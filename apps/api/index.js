@@ -226,7 +226,7 @@ app.get('/v1/events/authorized/:userId', async (req, res) => {
 
 // Register a new Asset with Encrypted Metadata
 app.post('/v1/assets', async (req, res) => {
-  const { ownerId, groupId, encryptedMetadata, visibilityLayer, status } = req.body;
+  const { ownerId, groupId, encryptedMetadata, visibilityLayer, autoApproveLayer, status, requiresHighCapacity } = req.body;
   try {
     const asset = await prisma.asset.create({
       data: {
@@ -234,7 +234,9 @@ app.post('/v1/assets', async (req, res) => {
         groupId,
         encryptedMetadata,
         visibilityLayer: visibilityLayer || 'INNER_CIRCLE',
-        status: status || 'AVAILABLE'
+        autoApproveLayer: autoApproveLayer || 'INNER_CIRCLE',
+        status: status || 'AVAILABLE',
+        requiresHighCapacity: requiresHighCapacity || false
       }
     });
     res.send(asset);
@@ -287,15 +289,40 @@ app.get('/v1/assets/catalog/:userId', async (req, res) => {
 
 // Submit a Loan Request
 app.post('/v1/loan-requests', async (req, res) => {
-  const { assetId, borrowerId, dueDate } = req.body;
+  const { assetId, borrowerId, dueDate, trustDistance } = req.body;
   try {
+    // 1. Fetch the Asset to check autoApproveLayer
+    const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+    if (!asset) return res.status(404).send({ error: 'Asset not found' });
+
+    // Trust Layer Hierarchy (Lower index = Tighter Trust)
+    const layerHierarchy = ['INNER_CIRCLE', 'EXTENDED_POLYCULE', 'OUTER_RING', 'FRIENDS_OF_FRIENDS'];
+    
+    const requestDistance = trustDistance || 'OUTER_RING';
+    const borrowerLevel = layerHierarchy.indexOf(requestDistance);
+    const assetApprovalLevel = layerHierarchy.indexOf(asset.autoApproveLayer);
+
+    // If borrower is inside or equals the autoApproveLayer, auto-approve instantly
+    const isAutoApproved = borrowerLevel !== -1 && assetApprovalLevel !== -1 && borrowerLevel <= assetApprovalLevel;
+    const finalStatus = isAutoApproved ? 'APPROVED' : 'PENDING';
+
     const loanRequest = await prisma.loanRequest.create({
       data: {
         assetId,
         borrowerId,
+        trustDistance: requestDistance,
+        status: finalStatus,
         dueDate: dueDate ? new Date(dueDate) : null
       }
     });
+
+    if (isAutoApproved) {
+      await prisma.asset.update({
+        where: { id: assetId },
+        data: { status: 'LENT' }
+      });
+    }
+
     res.send(loanRequest);
   } catch (error) {
     res.status(500).send({ error: error.message });

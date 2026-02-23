@@ -9,6 +9,7 @@ export function AssetAddForm({ userId }: { userId: string }) {
   const [description, setDescription] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [layer, setLayer] = useState('INNER_CIRCLE');
+  const [autoApproveLayer, setAutoApproveLayer] = useState('INNER_CIRCLE');
   const [requiresHighCapacity, setRequiresHighCapacity] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,6 +31,7 @@ export function AssetAddForm({ userId }: { userId: string }) {
         ownerId: userId,
         encryptedMetadata,
         visibilityLayer: layer,
+        autoApproveLayer,
         requiresHighCapacity,
         status: 'AVAILABLE'
       });
@@ -75,6 +77,18 @@ export function AssetAddForm({ userId }: { userId: string }) {
           <option value="OUTER_RING">Outer Ring</option>
           <option value="FRIENDS_OF_FRIENDS">Friends of Friends</option>
         </select>
+      </div>
+      <div style={{ marginBottom: '12px' }}>
+        <label style={{ fontSize: '14px', color: '#4b5563' }}>Auto-Approve Loans For:</label>
+        <select value={autoApproveLayer} onChange={e => setAutoApproveLayer(e.target.value)} style={{ marginLeft: '8px', padding: '4px' }}>
+          <option value="INNER_CIRCLE">Inner Circle</option>
+          <option value="EXTENDED_POLYCULE">Extended Network</option>
+          <option value="OUTER_RING">Outer Ring</option>
+          <option value="FRIENDS_OF_FRIENDS">Friends of Friends</option>
+        </select>
+        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+          Users outside this trust layer will require manual approval to borrow this asset.
+        </div>
       </div>
       <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center' }}>
         <input 

@@ -213,13 +213,41 @@ describe('Kinship API Endpoints', () => {
       expect(res.statusCode).toEqual(500);
     });
 
-    it('POST /v1/loan-requests should create request', async () => {
-      prisma.loanRequest.create.mockResolvedValue({ id: 'lr1' });
-      const res = await request(app).post('/v1/loan-requests').send({ assetId: 'a1', borrowerId: 'u2' });
+    it('POST /v1/loan-requests should create request (PENDING by default)', async () => {
+      prisma.asset.findUnique.mockResolvedValue({ id: 'a1', autoApproveLayer: 'INNER_CIRCLE' });
+      prisma.loanRequest.create.mockResolvedValue({ id: 'lr1', status: 'PENDING' });
+      const res = await request(app).post('/v1/loan-requests').send({ assetId: 'a1', borrowerId: 'u2', trustDistance: 'OUTER_RING' });
       expect(res.statusCode).toEqual(200);
+      expect(prisma.loanRequest.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: 'PENDING', trustDistance: 'OUTER_RING' })
+      }));
+    });
+
+    it('POST /v1/loan-requests should instantly auto-approve if borrower is within autoApproveLayer', async () => {
+       prisma.asset.findUnique.mockResolvedValue({ id: 'a1', autoApproveLayer: 'EXTENDED_POLYCULE' });
+       prisma.loanRequest.create.mockResolvedValue({ id: 'lr2', status: 'APPROVED' });
+       prisma.asset.update.mockResolvedValue({ id: 'a1', status: 'LENT' });
+
+       // Borrower is INNER_CIRCLE, Asset requires EXTENDED_POLYCULE -> Should Auto Approve
+       const res = await request(app).post('/v1/loan-requests').send({ assetId: 'a1', borrowerId: 'u3', trustDistance: 'INNER_CIRCLE' });
+       expect(res.statusCode).toEqual(200);
+       expect(prisma.loanRequest.create).toHaveBeenCalledWith(expect.objectContaining({
+         data: expect.objectContaining({ status: 'APPROVED', trustDistance: 'INNER_CIRCLE' })
+       }));
+       expect(prisma.asset.update).toHaveBeenCalledWith({
+         where: { id: 'a1' },
+         data: { status: 'LENT' }
+       });
+    });
+
+    it('POST /v1/loan-requests should 404 if asset not found', async () => {
+      prisma.asset.findUnique.mockResolvedValue(null);
+      const res = await request(app).post('/v1/loan-requests').send({ assetId: 'a1' });
+      expect(res.statusCode).toEqual(404);
     });
 
     it('POST /v1/loan-requests should handle 500 exceptions', async () => {
+      prisma.asset.findUnique.mockResolvedValue({ id: 'a1', autoApproveLayer: 'INNER_CIRCLE' });
       prisma.loanRequest.create.mockRejectedValue(new Error('Fail'));
       const res = await request(app).post('/v1/loan-requests').send({ assetId: 'a1' });
       expect(res.statusCode).toEqual(500);

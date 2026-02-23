@@ -102,6 +102,7 @@ export interface Asset {
   groupId?: string;
   status: string;
   visibilityLayer: string;
+  autoApproveLayer?: string;
   requiresHighCapacity?: boolean;
   encryptedMetadata?: string;
   owner?: { email: string };
