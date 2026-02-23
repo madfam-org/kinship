@@ -6,6 +6,7 @@ jest.mock('./prisma', () => {
       upsert: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
+      update: jest.fn(),
     },
     group: {
       create: jest.fn(),

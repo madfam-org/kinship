@@ -56,6 +56,21 @@ describe('Kinship API Endpoints', () => {
       expect(res.statusCode).toEqual(500);
     });
 
+    it('PATCH /v1/users/:id/battery should update the battery level', async () => {
+      prisma.user.update.mockResolvedValue({ id: 'u1', socialBattery: 20 });
+      const res = await request(app).patch('/v1/users/u1/battery').send({ level: 20 });
+      expect(res.statusCode).toEqual(200);
+      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'u1' },
+      }));
+    });
+
+    it('PATCH /v1/users/:id/battery should handle 500 exceptions', async () => {
+      prisma.user.update.mockRejectedValue(new Error('Fail'));
+      const res = await request(app).patch('/v1/users/u1/battery').send({ level: 20 });
+      expect(res.statusCode).toEqual(500);
+    });
+
     it('GET /v1/users/:userId/network should return shared group members', async () => {
       prisma.groupMembership.findMany.mockResolvedValue([{ groupId: 'g1' }]);
       prisma.user.findMany.mockResolvedValue([{ id: 'u2', email: 'friend@kinship.local' }]);
@@ -174,9 +189,22 @@ describe('Kinship API Endpoints', () => {
 
     it('GET /v1/assets/catalog/:userId should fetch overlapping items', async () => {
       prisma.groupMembership.findMany.mockResolvedValue([{ groupId: 'g1' }]);
-      prisma.asset.findMany.mockResolvedValue([{ id: 'a1', ownerId: 'u1' }]);
+      prisma.asset.findMany.mockResolvedValue([{ id: 'a1', ownerId: 'u1', requiresHighCapacity: false, owner: { socialBattery: 100 } }]);
       const res = await request(app).get('/v1/assets/catalog/u1');
       expect(res.statusCode).toEqual(200);
+    });
+
+    it('GET /v1/assets/catalog/:userId should filter out high capacity assets if owner battery is < 20', async () => {
+      prisma.groupMembership.findMany.mockResolvedValue([{ groupId: 'g1' }]);
+      prisma.asset.findMany.mockResolvedValue([
+        { id: 'a1', ownerId: 'u1', requiresHighCapacity: false, owner: { socialBattery: 10 } },
+        { id: 'a2', ownerId: 'u2', requiresHighCapacity: true, owner: { socialBattery: 15 } },
+        { id: 'a3', ownerId: 'u3', requiresHighCapacity: true, owner: { socialBattery: 100 } }
+      ]);
+      const res = await request(app).get('/v1/assets/catalog/u1');
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.length).toEqual(2);
+      expect(res.body.find(a => a.id === 'a2')).toBeUndefined();
     });
 
     it('GET /v1/assets/catalog/:userId should handle 500 exceptions', async () => {

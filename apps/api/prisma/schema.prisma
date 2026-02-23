@@ -110,6 +110,7 @@ model Asset {
 
   status           String    @default("AVAILABLE") // AVAILABLE, LENT, MAINTENANCE
   visibilityLayer  String    // INNER_CIRCLE, OUTER_RING, etc.
+  requiresHighCapacity Boolean @default(false)
 
   loanRequests     LoanRequest[]
 }

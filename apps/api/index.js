@@ -75,6 +75,21 @@ app.get('/v1/users/:userId/network', async (req, res) => {
   }
 });
 
+// Update User Social Battery (Inter-Module Automation)
+app.patch('/v1/users/:id/battery', async (req, res) => {
+  const { id } = req.params;
+  const { level } = req.body;
+  try {
+    const user = await prisma.user.update({
+      where: { id },
+      data: { socialBattery: level, batteryLastUpdate: new Date() }
+    });
+    res.send(user);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
 // --- Group Management ---
 
 app.post('/v1/groups', async (req, res) => {
@@ -249,11 +264,22 @@ app.get('/v1/assets/catalog/:userId', async (req, res) => {
         ]
       },
       include: {
-        owner: { select: { email: true } },
+        owner: { select: { email: true, socialBattery: true } },
         group: { select: { name: true } }
       }
     });
-    res.send(assets);
+
+    // Inter-Module Automation: Filter out assets that require high capacity 
+    // if the owner's social battery is critically low (< 20). Protects owner from burnout.
+    const filteredAssets = assets.filter(asset => {
+      // If the owner's battery is known, less than 20, and the asset requires high capacity, hide it.
+      if (asset.requiresHighCapacity && asset.owner.socialBattery !== null && asset.owner.socialBattery < 20) {
+        return false;
+      }
+      return true;
+    });
+
+    res.send(filteredAssets);
   } catch (error) {
     res.status(500).send({ error: error.message });
   }

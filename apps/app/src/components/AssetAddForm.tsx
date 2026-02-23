@@ -9,6 +9,7 @@ export function AssetAddForm({ userId }: { userId: string }) {
   const [description, setDescription] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [layer, setLayer] = useState('INNER_CIRCLE');
+  const [requiresHighCapacity, setRequiresHighCapacity] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +30,7 @@ export function AssetAddForm({ userId }: { userId: string }) {
         ownerId: userId,
         encryptedMetadata,
         visibilityLayer: layer,
+        requiresHighCapacity,
         status: 'AVAILABLE'
       });
 
@@ -73,6 +75,18 @@ export function AssetAddForm({ userId }: { userId: string }) {
           <option value="OUTER_RING">Outer Ring</option>
           <option value="FRIENDS_OF_FRIENDS">Friends of Friends</option>
         </select>
+      </div>
+      <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center' }}>
+        <input 
+          type="checkbox" 
+          id="capacityCheck"
+          checked={requiresHighCapacity} 
+          onChange={e => setRequiresHighCapacity(e.target.checked)} 
+          style={{ marginRight: '8px' }}
+        />
+        <label htmlFor="capacityCheck" style={{ fontSize: '14px', color: '#4b5563' }}>
+          Requires High Social Capacity to Lend (Auto-hides if Battery &lt; 20%)
+        </label>
       </div>
       <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}>
         Encrypt & Save
