@@ -1,5 +1,5 @@
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.js
 
@@ -25,3 +25,5 @@ yarn-error.log*
 # env
 .env
 .env.local
+refactor.js
+**/node_modules/
