@@ -1,17 +1,33 @@
 # Kinship
 
-> A secure, end-to-end encrypted platform for navigating complex logistics and energy within enmeshed communities.
+> A platform for navigating complex logistics and energy within enmeshed communities — designed around end-to-end encryption. **E2EE is a design target, not yet an implemented guarantee** (see Current Status below).
 
 Kinship replaces traditional calendars and group chats with a privacy-first, tiered networking system. It is designed specifically for polyamorous networks, intentional communities, chosen families, and community cooperatives.
+
+## Current Status (2026-07-04)
+
+Kinship is a **prototype**. It is **not production software** and should not be
+used to protect real personal data yet. Concretely:
+
+- **E2EE is not implemented.** The WebCrypto scaffolding in
+  `apps/app/src/lib/crypto.ts` is demo-grade (e.g. `initializeGroupKeyDemo`),
+  and the app runs against seeded demo users (`apps/api/seed.js`) rather than
+  real authenticated identities.
+- Test coverage is minimal (four test files across the app and API) and the
+  repository has **no CI** configured.
+- No security review or cryptographic audit has been performed.
+
+The sections below describe the product vision and Phase 1 design goals — read
+them as roadmap, not as shipped, audited functionality.
 
 ## Philosophy
 Standard calendar tools are built for rigid, corporate "public/private" binaries. Kinship acknowledges the nuance of real human connection through **"Shells of Trust."** 
 Instead of tracking everything or nothing, Kinship allows users to explicitly define who sees their deep logistical data, who sees their broad availability, and who sees nothing at all.
 
-## Core Features (Phase 1)
+## Roadmap / Vision: Core Features (Phase 1 targets)
 - **Shells of Trust Calendar**: Multi-layered scheduling with varying visibility (Inner Circle, Outer Ring, Friends of Friends).
 - **Social Battery Dashboard**: Non-verbal, ambient communication of emotional and physical bandwidth to prevent burnout.
-- **WebCrypto E2EE Infrastructure**: 100% end-to-end encrypted group data utilizing client-side RSA-OAEP and AES-GCM wrapping.
+- **WebCrypto E2EE Infrastructure** *(design target — not implemented; see Current Status)*: 100% end-to-end encrypted group data utilizing client-side RSA-OAEP and AES-GCM wrapping.
 - **Event Polling & "Snowball Mode"**: Asynchronous event planning with togglable expanded visibility for community organizing without exposing core network data.
 
 ## Monorepo Architecture
